@@ -11,6 +11,7 @@ import torch
 import torchaudio
 from torchaudio import transforms as T
 from scipy.signal import butter, lfilter
+import pywt
 import pandas as pd
 import librosa
 import numpy as np
@@ -20,7 +21,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import torch.nn as nn
 import time
-
+import argparse
 
 def crop_first(data, crop_size=128):
     return data[0: crop_size, :]
@@ -253,18 +254,31 @@ def get_entire_signal_librosa(data_folder, filename, input_sec=8, sample_rate=16
 #     return yt
 
 
-def get_split_signal_librosa(data_folder, filename, input_sec=8, sample_rate=16000, butterworth_filter=None, spectrogram=False, trim_tail=False):
+def get_split_signal_librosa(data_folder, filename, input_sec=8, sample_rate=16000, butterworth_filter=None, spectrogram=False, trim_tail=False,
+                             wavelet=None, wavelet_level=6, threshold_mode='soft', method='universal', normalized_modality = None, wavelet_modality = None):
     # print(os.path.join(data_folder, filename+'.wav'))
 
     # load file with specified sample rate (also converts to mono)
     data, rate = librosa.load(os.path.join(
         data_folder, filename+'.wav'), sr=sample_rate)
+    
+    # if augment:
+    #     data = waveform_augment(data, sample_rate, method = augment)
 
     if butterworth_filter:
         # butter bandpass filter
         data = _butter_bandpass_filter(
-            lowcut=200, highcut=1800, fs=sample_rate, order=butterworth_filter)
-
+            data, lowcut=100, highcut=3000, fs=sample_rate, order=butterworth_filter)
+        
+    if wavelet is not None and (wavelet_modality == "all" or normalized_modality == wavelet_modality):
+        data = denoise_audio_dwt(
+            data,
+            wavelet=wavelet,
+            level=wavelet_level,
+            threshold_mode=threshold_mode,
+            method=method
+        )
+    
     # Trim leading and trailing silence from an audio signal.
     FRAME_LEN = int(sample_rate / 10)  #
     HOP = int(FRAME_LEN / 2)  # 50% overlap, meaning 5ms hop length
@@ -298,6 +312,130 @@ def get_split_signal_librosa(data_folder, filename, input_sec=8, sample_rate=160
     return audio_image
 
     # return [pre_process_audio_mel_t(chunk.squeeze()) for chunk in audio_chunks]
+
+
+def denoise_audio_dwt(audio, wavelet='db4', level=3, threshold_mode='soft', method='universal'):
+    audio = np.asarray(audio, dtype=np.float64)
+    n = len(audio)
+    if n < 8:   # quá ngắn thì thôi
+        return audio
+    # level hợp lệ
+    max_level = pywt.dwt_max_level(data_len=n, filter_len=pywt.Wavelet(wavelet).dec_len)
+    level = int(min(level, max_level))
+    if level < 1:
+        return audio
+
+    coeffs = pywt.wavedec(audio, wavelet, level=level)
+
+    detail = coeffs[-1]
+    mad = np.median(np.abs(detail))
+    sigma = mad / 0.6745
+
+    # nếu sigma ~ 0 hoặc NaN/inf -> skip denoise
+    if (not np.isfinite(sigma)) or (sigma < 1e-12):
+        return audio
+
+    coeffs_thresh = list(coeffs)
+
+    for i in range(1, len(coeffs_thresh)):
+        c = coeffs_thresh[i]
+        c = np.nan_to_num(c, nan=0.0, posinf=0.0, neginf=0.0)
+
+        if method == 'universal':
+            threshold = sigma * np.sqrt(2.0 * np.log(n))
+
+        elif method == 'sureshrink':
+            # Vectorized SureShrink (soft), level-dependent
+            c_norm = c / sigma
+            a = np.sort(np.abs(c_norm))       # |c| sorted
+            a2 = a * a                        # |c|^2
+            n_i = a.size
+            if n_i == 0:
+                threshold = 0.0
+            else:
+                cumsum_a2 = np.cumsum(a2)
+                k = np.arange(1, n_i + 1)     # 1..n_i
+                risk = n_i - 2 * k + cumsum_a2 + (n_i - k) * a2
+                t_sure = a[np.argmin(risk)]
+                t_univ = np.sqrt(2.0 * np.log(max(n_i, 2)))
+                threshold = min(t_sure, t_univ) * sigma
+        elif method == 'bayeshrink':
+            sigma_y2 = np.mean(c ** 2)
+            sigma_n2 = sigma ** 2
+            sigma_x2 = max(sigma_y2 - sigma_n2, 0.0)
+
+            if sigma_x2 <= 1e-12:
+                threshold = np.max(np.abs(c)) if c.size > 0 else 0.0
+            else:
+                threshold = sigma_n2 / np.sqrt(sigma_x2)
+
+        coeffs_thresh[i] = pywt.threshold(c, threshold, mode=threshold_mode)
+
+    denoised = pywt.waverec(coeffs_thresh, wavelet)
+
+    if len(denoised) > n:
+        denoised = denoised[:n]
+    elif len(denoised) < n:
+        denoised = np.pad(denoised, (0, n - len(denoised)))
+    return denoised
+
+def _gen_colored_noise(signal, color='pink'):
+    N = len(signal)
+    state = np.random.RandomState()
+    uneven = N % 2
+    X = state.randn(N // 2 + 1 + uneven) + 1j * state.randn(N // 2 + 1 + uneven)
+    S = np.arange(len(X)) + 1
+    
+    if color == 'pink':
+        X /= np.sqrt(S) # 1/f (Mô phỏng tiếng ồn môi trường, gió)
+    elif color == 'brown':
+        X /= S # 1/f^2 (Mô phỏng tiếng ầm ỳ, xe cộ xa, nhịp tim nhiễu)
+        
+    noise = np.fft.irfft(X)
+    if uneven:
+        noise = noise[:-1]
+    return noise
+
+def waveform_augment(data, sample_rate=16000, method=None):
+    # Nếu không truyền method hoặc method rỗng -> trả về gốc
+    if not method:
+        return data
+
+    if method == "bandpass":
+        low = random.uniform(50, 150)
+        high = random.uniform(2000, 4000)
+        data = _butter_bandpass_filter(data, lowcut=low, highcut=high, fs=sample_rate, order=random.randint(3, 6))
+
+    elif method == "noise":
+        noise_type = random.choice(['pink', 'brown'])
+        # Biên độ nhiễu: 0.5% đến 2% so với tín hiệu gốc
+        noise_amp = random.uniform(0.005, 0.02) * np.amax(np.abs(data))
+        noise = _gen_colored_noise(data, color=noise_type)
+        # Resize nếu độ dài không khớp (do làm tròn FFT)
+        if len(noise) != len(data):
+            noise = np.resize(noise, data.shape)
+        data = data + noise_amp * noise
+
+    elif method == "gain":
+        # Thay đổi biên độ (Volume scaling)
+        data = data * random.uniform(0.8, 1.2)
+
+    elif method == "time_shift":
+        shift_max = int(sample_rate * 0.5) # Max 0.5s
+        shift_amt = random.randint(0, shift_max)
+        direction = random.choice(['left', 'right'])
+        
+        if direction == 'right':
+            data = np.pad(data, (shift_amt, 0), mode='constant')[:-shift_amt]
+        else:
+            data = np.pad(data, (0, shift_amt), mode='constant')[shift_amt:]
+    
+    elif method == "peak_norm":
+        max_val = np.max(np.abs(data))
+        if max_val > 0:
+            data = data / max_val
+
+    return data
 
 
 def decide_droplast(yt, sr, input_sec):

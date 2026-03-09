@@ -34,7 +34,7 @@ def get_annotaion_from_csv(path):
 #  Coswara-Data/Extracted_data/20200418/C7Km0KttQRMMM6UoyocajfgZAOB3/cough-heavy.wav
 # Coswara-Data/Extracted_data/20200814/kgjTguvo3vZJTO7F1qO9GxEicbA3/cough-heavy.wav
 
-def preprocess_label(label="sex"):
+def preprocess_label0(label="sex"):
     df = pd.read_csv('datasets/Coswara-Data/combined_data.csv', index_col="id")
     df = df.replace(np.nan, '', regex=True)
 
@@ -61,13 +61,61 @@ def preprocess_label(label="sex"):
                 continue
 
             files = gb.glob(
-                "/".join(["datasets/Coswara-Data/Extracted_data", "*", uuid, modality + ".wav"]))
+                "/".join([data_dir, "*", uuid, modality + ".wav"]))
 
             filename = files[0]
             if label == "sex":
                 audio_label = sex_label_dict[row["g"]]
             elif label == "smoker":
                 audio_label = smoker_label_dict[row["smoker"]]
+
+            if audio_label is not None:
+                label_list.append(audio_label)
+                filename_list.append(filename)
+
+        print(collections.Counter(label_list))
+        np.save(feature_dir + "{}_label_{}.npy".format(label, modality), label_list)
+        np.save(
+            feature_dir + "entireaudio_filenames_{}_w_{}.npy".format(modality, label), filename_list)
+
+
+def preprocess_label(label="sex"):
+    df = pd.read_csv('datasets/Coswara-Data/combined_data.csv', index_col="id")
+    df = df.replace(np.nan, '', regex=True)
+
+    sex_label_dict = {"female": 1, "male": 0, "pnts": None, "Other": None}
+    smoker_label_dict = {"y": 1, "n": 0, "TRUE": 1,
+                         "True": 1, "False": 0, "FALSE": 0, "": None}
+    covid_label_dict = collections.defaultdict(lambda: None, {"healthy": 0, "positive_mild": 1, "positive_moderate": 1 })
+
+    for modality in ["breathing-deep", "breathing-shallow", "cough-heavy", "cough-shallow"]:
+        label_list = []
+        filename_list = []
+        annotation = get_annotaion_from_csv(
+            "datasets/Coswara-Data/annotations/{}_labels.csv".format(modality))
+        for uuid, row in tqdm(df.iterrows(), total=df.shape[0]):
+
+            if uuid == "9hftEYixyhP1Neeq3fB7ZwITQC53" and modality == "cough-shallow":
+                # this user has missing file
+                continue
+
+            if uuid in ["C7Km0KttQRMMM6UoyocajfgZAOB3", "kgjTguvo3vZJTO7F1qO9GxEicbA3"]:
+                continue
+
+            if annotation["_".join([uuid, modality])] == "0":
+                # bad quality
+                continue
+
+            files = gb.glob(
+                "/".join([data_dir, "*", uuid, modality + ".wav"]))
+
+            filename = files[0]
+            if label == "sex":
+                audio_label = sex_label_dict[row["g"]]
+            elif label == "smoker":
+                audio_label = smoker_label_dict[row["smoker"]]
+            elif label == "covid":
+                audio_label = covid_label_dict[row["covid_status"]]
 
             if audio_label is not None:
                 label_list.append(audio_label)
@@ -287,24 +335,29 @@ if __name__ == '__main__':
     if not os.path.exists(feature_dir):
         check_data_dir()
         os.makedirs(feature_dir)
-        preprocess_split_google()
+    #     preprocess_split_google()
 
-        #  run once
-        for label in ["sex", "smoker"]:
-            # preprocess_label(label)
-            for modality in ["breathing", "cough"][1:]:
-                preprocess_modality(modality, label)
+    for label in ["sex", "covid"]:
+        preprocess_label(label)
+        for modality in ["breathing", "cough"]:
+            preprocess_modality(modality,label)
 
-    if args.pretrain in ["vggish", "opensmile", "clap", "audiomae"]:
-        extract_and_save_embeddings_baselines(
-            args.modality, args.label, args.pretrain)
-    else:
-        if args.pretrain == "operaCT":
-            input_sec = args.min_len_htsat
-        elif args.pretrain == "operaCE":
-            input_sec = args.min_len_cnn
-        elif args.pretrain == "operaGT":
-            input_sec = 8.18
-        preprocess_spectrogram(args.modality, args.label)
-        extract_and_save_embeddings(
-            args.pretrain, args.modality, args.label, input_sec, dim=args.dim)
+    #     #  run once
+    #     for label in ["sex", "smoker"]:
+    #         # preprocess_label(label)
+    #         for modality in ["breathing", "cough"][1:]:
+    #             preprocess_modality(modality, label)
+
+    # if args.pretrain in ["vggish", "opensmile", "clap", "audiomae"]:
+    #     extract_and_save_embeddings_baselines(
+    #         args.modality, args.label, args.pretrain)
+    # else:
+    #     if args.pretrain == "operaCT":
+    #         input_sec = args.min_len_htsat
+    #     elif args.pretrain == "operaCE":
+    #         input_sec = args.min_len_cnn
+    #     elif args.pretrain == "operaGT":
+    #         input_sec = 8.18
+    #     preprocess_spectrogram(args.modality, args.label)
+    #     extract_and_save_embeddings(
+    #         args.pretrain, args.modality, args.label, input_sec, dim=args.dim)

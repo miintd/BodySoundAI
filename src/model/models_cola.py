@@ -38,7 +38,7 @@ class EncoderHTSAT(torch.nn.Module):
         y = self.encoder(x)
 
         return y
-
+ 
 
 class Cola(pl.LightningModule):
     def __init__(self, p=0.1, dim_fea=1280, dim_hidden=1280, dim_out=512, encoder="efficientnet", max_len=251, out_emb=2048):

@@ -73,6 +73,8 @@ def split_set():
         u = filename.split('/')[-1].split('_')[0][2:]
         if u in x_train:
             audio_split.append("train")
+        elif u in x_val:
+            audio_split.append("val")
         else:
             audio_split.append("test")
 
@@ -155,14 +157,14 @@ if __name__ == '__main__':
         for trait in ["label", "sex", "age"]:
             check_demographic(trait)
 
-    if args.pretrain in ["vggish", "opensmile", "clap", "audiomae"]:
-        extract_and_save_embeddings_baselines(args.pretrain)
-    else:
-        if args.pretrain == "operaCT":
-            input_sec = args.min_len_htsat
-        elif args.pretrain == "operaCE":
-            input_sec = args.min_len_cnn
-        elif args.pretrain == "operaGT":
-            input_sec = 8.18
-        extract_and_save_embeddings(
-            args.pretrain, input_sec=input_sec, dim=args.dim)
+    # if args.pretrain in ["vggish", "opensmile", "clap", "audiomae"]:
+    #     extract_and_save_embeddings_baselines(args.pretrain)
+    # else:
+    #     if args.pretrain == "operaCT":
+    #         input_sec = args.min_len_htsat
+    #     elif args.pretrain == "operaCE":
+    #         input_sec = args.min_len_cnn
+    #     elif args.pretrain == "operaGT":
+    #         input_sec = 8.18
+    #     extract_and_save_embeddings(
+    #         args.pretrain, input_sec=input_sec, dim=args.dim)

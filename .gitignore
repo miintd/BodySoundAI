@@ -1,0 +1,39 @@
+# datasets
+datasets/
+datasets1/
+
+# features
+feature/
+feature_ori/
+
+# logs
+logs/
+logs_*/
+out_*.txt
+
+# experiments
+wandb/
+
+# numpy features
+*.npy
+*.npz
+
+# python
+__pycache__/
+*.pyc
+*.pyo
+
+# checkpoints/weights
+cks/llm/
+*.pt
+*.pth
+*.ckpt
+*.bin
+*.safetensors
+
+# system
+.DS_Store
+Thumbs.db
+
+# generated images
+output.png

@@ -100,7 +100,7 @@ def extract_opera_feature(sound_dir_loc, pretrain="operaCE", input_sec=8, from_s
     print(x_data.shape)
     return x_data
 
-
+ 
 def initialize_pretrained_model(pretrain):
     if pretrain == "operaCT":
         model = Cola(encoder="htsat")

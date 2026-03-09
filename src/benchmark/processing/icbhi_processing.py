@@ -20,7 +20,7 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 data_dir = "datasets/icbhi/"
 feature_dir = "feature/icbhidisease_eval/"
 
-audio_dir = data_dir + "ICBHI_final_database/"
+audio_dir = "datasets/icbhi/ICBHI_final_database/"
 
 if not os.path.exists(audio_dir):
     print(f"Folder not found: {audio_dir}, downloading the dataset")
@@ -89,26 +89,26 @@ def extract_and_save_embeddings(feature="operaCE", input_sec=8, dim=1280):
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--pretrain", type=str, default="operaCE")
-    parser.add_argument("--dim", type=int, default=1280)
-    parser.add_argument("--min_len_cnn", type=int, default=8)
-    parser.add_argument("--min_len_htsat", type=int, default=8)
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--pretrain", type=str, default="operaCE")
+    # parser.add_argument("--dim", type=int, default=1280)
+    # parser.add_argument("--min_len_cnn", type=int, default=8)
+    # parser.add_argument("--min_len_htsat", type=int, default=8)
 
-    args = parser.parse_args()
+    # args = parser.parse_args()
 
     if not os.path.exists(feature_dir):
         os.makedirs(feature_dir)
         process_disease()
 
-    if args.pretrain in ["vggish", "opensmile", "clap", "audiomae"]:
-        extract_and_save_embeddings_baselines(args.pretrain)
-    else:
-        if args.pretrain == "operaCT":
-            input_sec = args.min_len_htsat
-        elif args.pretrain == "operaCE":
-            input_sec = args.min_len_cnn
-        elif args.pretrain == "operaGT":
-            input_sec = 8.18
-        extract_and_save_embeddings(
-            args.pretrain, input_sec=input_sec, dim=args.dim)
+    # if args.pretrain in ["vggish", "opensmile", "clap", "audiomae"]:
+    #     extract_and_save_embeddings_baselines(args.pretrain)
+    # else:
+    #     if args.pretrain == "operaCT":
+    #         input_sec = args.min_len_htsat
+    #     elif args.pretrain == "operaCE":
+    #         input_sec = args.min_len_cnn
+    #     elif args.pretrain == "operaGT":
+    #         input_sec = 8.18
+    #     extract_and_save_embeddings(
+    #         args.pretrain, input_sec=input_sec, dim=args.dim)

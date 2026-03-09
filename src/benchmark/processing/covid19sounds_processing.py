@@ -6,12 +6,45 @@ import os
 
 task1_data_dir = "datasets/covid19-sounds/0426_EN_used_task1/"
 task1_dir = "feature/covid19sounds_eval/"
-task1_downsampled_dir = "feature/covid19sounds_eval/downsampled/"
+task2_dir = "feature/covid19sounds_eval/covid_eval/"
+task1_downsampled_dir = "feature/covid19sounds_eval/smoker_eval/"
 
 if not os.path.exists(task1_data_dir):
     raise FileNotFoundError(
         f"Folder not found: {task1_data_dir}, please download the dataset.")
 
+def preprocess_task2(modality="cough"):
+    """run once and shared by all methods"""
+    data_split = []
+    labels = []
+    sound_dir_loc = []
+    df = pd.read_csv(
+        "datasets/covid19-sounds/data_0426_en_task2.csv", delimiter=",")
+
+    for _, row in tqdm(df.iterrows(), total=df.shape[0]):
+        # userID = row["Uid"]
+        # folder = row["Folder Name"]
+        # filename = row["{} filename".format(modality.capitalize())]
+        split = row["fold"]
+        # label = row["label"]
+        label = row["label"]
+        # if userID[:4] == "2020":
+        #     userID = "form-app-users"
+            
+        path = row["{}_path".format(modality)]
+        path = path.replace("\\", "/") 
+        file = "/".join(["datasets/covid19-sounds/0426_EN_used_task2",
+                         path])
+                        # userID, folder, filename])
+
+        labels.append(label)
+        data_split.append(split)
+        sound_dir_loc.append(file)
+
+    np.save(task2_dir + "labels.npy", np.array(labels))
+    np.save(task2_dir + "data_split.npy", np.array(data_split))
+    np.save(task2_dir + "sound_dir_loc_{}.npy".format(modality),
+            np.array(sound_dir_loc))
 
 def preprocess_task1(modality="cough"):
     """run once and shared by all methods"""
@@ -119,31 +152,38 @@ def extract_opera_features(feature, task=1, modality="cough", input_sec=8, dim=1
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--task", type=str, default="1")
-    parser.add_argument("--pretrain", type=str, default="operaCE")
-    parser.add_argument("--dim", type=int, default=1280)
-    parser.add_argument("--min_len_cnn", type=int, default=8)
-    parser.add_argument("--min_len_htsat", type=int, default=8)
-    parser.add_argument("--modality", type=str, default="breath")
-    args = parser.parse_args()
+    # parser = argparse.ArgumentParser()
+    # parser.add_argument("--task", type=str, default="1")
+    # parser.add_argument("--pretrain", type=str, default="operaCE")
+    # parser.add_argument("--dim", type=int, default=1280)
+    # parser.add_argument("--min_len_cnn", type=int, default=8)
+    # parser.add_argument("--min_len_htsat", type=int, default=8)
+    # parser.add_argument("--modality", type=str, default="breath")
+    # args = parser.parse_args()
 
     if not os.path.exists(task1_dir):
         os.makedirs(task1_dir)
+        os.makedirs(task2_dir)
+        # os.makedirs(task1_downsampled_smoker_dir)
         os.makedirs(task1_downsampled_dir)
 
         for modality in ["breath", "cough"]:
             preprocess_task1(modality)
+            preprocess_task2(modality)
+            print("Preprocessing done for modality:", modality)
+        print("Starting downsampling smoker task...")
         task1_downsample()
+        # task1_smoker_downsample()k1(modality)
+        # task1_downsample()
 
-    if args.pretrain in ["vggish", "opensmile", "clap", "audiomae"]:
-        extract_and_save_embeddings_baselines(1, args.modality, args.pretrain)
-    else:
-        if args.pretrain == "operaCT":
-            input_sec = args.min_len_htsat
-        elif args.pretrain == "operaCE":
-            input_sec = args.min_len_cnn
-        elif args.pretrain == "operaGT":
-            input_sec = 8.18
-        extract_opera_features(args.pretrain, task=int(
-            args.task), modality=args.modality, input_sec=input_sec, dim=args.dim)
+    # if args.pretrain in ["vggish", "opensmile", "clap", "audiomae"]:
+    #     extract_and_save_embeddings_baselines(1, args.modality, args.pretrain)
+    # else:
+    #     if args.pretrain == "operaCT":
+    #         input_sec = args.min_len_htsat
+    #     elif args.pretrain == "operaCE":
+    #         input_sec = args.min_len_cnn
+    #     elif args.pretrain == "operaGT":
+    #         input_sec = 8.18
+    #     extract_opera_features(args.pretrain, task=int(
+    #         args.task), modality=args.modality, input_sec=input_sec, dim=args.dim)

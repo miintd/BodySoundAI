@@ -10,6 +10,7 @@ from tqdm import tqdm
 data_dir = "datasets/covidUK/"
 feature_dir = "feature/coviduk_eval/"
 audio_dir = data_dir + "audio_selected/"
+# audio_dir = "/media/tran-dam-quoc-khanh/76e48e08-7447-4a59-9252-9576a8b4097f/home/businessailab5/Downloads/backup/OPERA_data/covidUK/audio_selected/"
 
 if not os.path.exists(audio_dir):
     raise FileNotFoundError(f"Folder not found: {audio_dir}, please download the dataset.")
@@ -55,7 +56,7 @@ def process_label(modality="exhalation"):
         label = label_dict[label]
 
         label_list.append(label)
-        filename_list.append(data_dir + "audio_selected/" + filename)
+        filename_list.append(audio_dir + filename)
         if filename in train_files:
             split.append("train")
         elif filename in val_files:
@@ -112,13 +113,13 @@ if __name__ == '__main__':
         for modality in ["exhalation", "cough"]:
             process_label(modality)
     
-    if args.pretrain in ["vggish", "opensmile", "clap", "audiomae"]: 
-        extract_and_save_embeddings_baselines(args.modality, args.pretrain)
-    else:
-        if args.pretrain == "operaCT":
-            input_sec = args.min_len_htsat
-        elif args.pretrain == "operaCE":
-            input_sec = args.min_len_cnn
-        elif args.pretrain == "operaGT":
-            input_sec = 8.18
-        extract_and_save_embeddings(args.pretrain, args.modality, input_sec, dim=args.dim)
+    # if args.pretrain in ["vggish", "opensmile", "clap", "audiomae"]: 
+    #     extract_and_save_embeddings_baselines(args.modality, args.pretrain)
+    # else:
+    #     if args.pretrain == "operaCT":
+    #         input_sec = args.min_len_htsat
+    #     elif args.pretrain == "operaCE":
+    #         input_sec = args.min_len_cnn
+    #     elif args.pretrain == "operaGT":
+    #         input_sec = 8.18
+    #     extract_and_save_embeddings(args.pretrain, args.modality, input_sec, dim=args.dim)

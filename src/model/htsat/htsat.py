@@ -400,11 +400,11 @@ class HTSAT_Swin_Transformer(nn.Module):
 
     def __init__(self, spec_size=256, patch_size=4, patch_stride=(4,4), 
                 in_chans=1, num_classes=527,
-                 embed_dim=96, depths=[2, 2, 6, 2], num_heads=[4, 8, 16, 32],
-                 window_size=8, mlp_ratio=4., qkv_bias=True, qk_scale=None,
-                 drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
-                 norm_layer=nn.LayerNorm, 
-                 ape=False, patch_norm=True,
+                embed_dim=96, depths=[2, 2, 6, 2], num_heads=[4, 8, 16, 32],
+                window_size=8, mlp_ratio=4., qkv_bias=True, qk_scale=None,
+                drop_rate=0., attn_drop_rate=0., drop_path_rate=0.1,
+                norm_layer=nn.LayerNorm, 
+                ape=False, patch_norm=True,
                  use_checkpoint=False, norm_before_mlp='ln', config = None, **kwargs):
         super(HTSAT_Swin_Transformer, self).__init__()
 
