@@ -15,7 +15,7 @@ import random
 from sklearn.model_selection import train_test_split
 
 from src.benchmark.RespLLM.model import RespLLM
-from src.benchmark.RespLLM.util_ori import test, get_dataloader, EarlyStopper, set_all_seed
+from src.benchmark.RespLLM.util import test, get_dataloader, EarlyStopper, set_all_seed
 # from src.benchmark.RespLLM.util import get_dataloader
 from src.benchmark.RespLLM.sampler import CategoriesSampler
 
@@ -565,7 +565,7 @@ if __name__ == "__main__":
     import wandb
 
     # Optionally set WANDB_API_KEY programmatically
-    os.environ['WANDB_API_KEY'] = "redacted"
+    os.environ['WANDB_API_KEY'] = "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"
 
     import argparse
     from pathlib import Path
