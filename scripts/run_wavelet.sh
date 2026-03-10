@@ -15,9 +15,10 @@ COMMON_ARGS=(
   --meta_val_interval 3
   --train_pct 1
   --batch_size 16
+  --threshold_mode "soft"
 )
 
-methods=("universal" "sureshrink" "bayesshrink")
+methods=("universal" "bayesshrink")
 
 # -----------------------------
 # 0) Baseline: no wavelet
