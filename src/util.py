@@ -359,7 +359,7 @@ def denoise_audio_dwt(audio, wavelet='db4', level=3, threshold_mode='soft', meth
                 t_sure = a[np.argmin(risk)]
                 t_univ = np.sqrt(2.0 * np.log(max(n_i, 2)))
                 threshold = min(t_sure, t_univ) * sigma
-        elif method == 'bayeshrink':
+        elif method == 'bayesshrink':
             sigma_y2 = np.mean(c ** 2)
             sigma_n2 = sigma ** 2
             sigma_x2 = max(sigma_y2 - sigma_n2, 0.0)
