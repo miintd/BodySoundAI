@@ -11,7 +11,6 @@ python src/benchmark/RespLLM/RespLLM.py \
         --meta_val_interval 3  \
         --train_pct 1 \
         --batch_size 16 \
-        --use_audiolabel \
         2>&1 | tee -a logs_1/out_RespLLM_gemma2B.txt
 
 # with audio label
