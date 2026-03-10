@@ -388,60 +388,63 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
     if configs.wavelet is None:
         spec_prefix = ""
     else:
-        spec_prefix = f"{configs.wavelet_modality}_{configs.wavelet}_{configs.wavelet_level}_{configs.threshold_mode}_{configs.method}_"
-    spec_file_name = feature_dir + f"{spec_prefix}spectrogram_pad{str(int(pad_len_htsat[dataset]))}" + suffix_dataset if dataset != "icbhidisease" else feature_dir + f"{spec_prefix}segmented_spectrogram_pad{str(int(pad_len_htsat[dataset]))}" + suffix_dataset
-    if not os.path.exists(spec_file_name):
-        from src.util import get_split_signal_librosa
-        x_data = []
-        if dataset == "icbhidisease":
-            y_segmented, y_set_segmented = [], []
-            # x_metadata_segmented = []
-            index_segmented = []
-            y_set = np.load(feature_dir + "split.npy")
-            for idx, audio_file in enumerate(sound_dir_loc):
-                data = get_split_signal_librosa("", audio_file[:-4], spectrogram=True, input_sec=pad_len_htsat[dataset], trim_tail=False,
-                                                wavelet=configs.wavelet, wavelet_level=configs.wavelet_level, method=configs.method, normalized_modality=normalized_modality, wavelet_modality=configs.wavelet_modality)
-                if y_set[idx] == "train":
-                    # print([y_set[idx]], len(data))mk  [0]
-                    x_data.extend(data)
-                    y_segmented.extend([y_label[idx]] * len(data))
-                    y_set_segmented.extend([y_set[idx]] * len(data))
-                    # x_metadata_segmented.extend([x_metadata[idx]] * len(data))
-                    index_segmented.extend([idx] * len(data))
-                else:
-                    # print([y_set[idx]])
-                    x_data.append(data[0])
-                    y_segmented.append(y_label[idx])
-                    y_set_segmented.append(y_set[idx])
-                    # x_metadata_segmented.append([x_metadata[idx]])
-                    index_segmented.append(idx)
-            x_data = np.array(x_data)
-            y_segmented = np.array(y_segmented)
-            y_set_segmented = np.array(y_set_segmented)
-            np.save(spec_file_name, x_data)
-            np.save(feature_dir + f"segmented_split.npy", y_set_segmented)
-            np.save(feature_dir + f"segmented_labels.npy", y_segmented)
-            np.save(feature_dir + f"segmented_index.npy", index_segmented)
+        if configs.wavelet_modality == "all" or normalized_modality == configs.wavelet_modality:
+            spec_prefix = f"{configs.wavelet_modality}_{configs.wavelet}_{configs.wavelet_level}_{configs.threshold_mode}_{configs.method}_"
         else:
-            for audio_file in sound_dir_loc: 
-                data = get_split_signal_librosa("", audio_file[:-4], spectrogram=True, input_sec=pad_len_htsat[dataset], trim_tail=False, 
-                                                wavelet=configs.wavelet, wavelet_level=configs.wavelet_level, method=configs.method, normalized_modality=normalized_modality, wavelet_modality=configs.wavelet_modality)[0]
-                # print(data.shape)
-                x_data.append(data)
-            x_data = np.array(x_data)
-            np.save(spec_file_name, x_data)    
+            spec_prefix = ""
+    spec_file_name = feature_dir + f"{spec_prefix}spectrogram_pad{str(int(pad_len_htsat[dataset]))}" + suffix_dataset if dataset != "icbhidisease" else feature_dir + f"{spec_prefix}segmented_spectrogram_pad{str(int(pad_len_htsat[dataset]))}" + suffix_dataset
+    # if not os.path.exists(spec_file_name):
+    #     from src.util import get_split_signal_librosa
+    #     x_data = []
+    #     if dataset == "icbhidisease":
+    #         y_segmented, y_set_segmented = [], []
+    #         # x_metadata_segmented = []
+    #         index_segmented = []
+    #         y_set = np.load(feature_dir + "split.npy")
+    #         for idx, audio_file in enumerate(sound_dir_loc):
+    #             data = get_split_signal_librosa("", audio_file[:-4], spectrogram=True, input_sec=pad_len_htsat[dataset], trim_tail=False,
+    #                                             wavelet=configs.wavelet, wavelet_level=configs.wavelet_level, method=configs.method, normalized_modality=normalized_modality, wavelet_modality=configs.wavelet_modality)
+    #             if y_set[idx] == "train":
+    #                 # print([y_set[idx]], len(data))mk  [0]
+    #                 x_data.extend(data)
+    #                 y_segmented.extend([y_label[idx]] * len(data))
+    #                 y_set_segmented.extend([y_set[idx]] * len(data))
+    #                 # x_metadata_segmented.extend([x_metadata[idx]] * len(data))
+    #                 index_segmented.extend([idx] * len(data))
+    #             else:
+    #                 # print([y_set[idx]])
+    #                 x_data.append(data[0])
+    #                 y_segmented.append(y_label[idx])
+    #                 y_set_segmented.append(y_set[idx])
+    #                 # x_metadata_segmented.append([x_metadata[idx]])
+    #                 index_segmented.append(idx)
+    #         x_data = np.array(x_data)
+    #         y_segmented = np.array(y_segmented)
+    #         y_set_segmented = np.array(y_set_segmented)
+    #         np.save(spec_file_name, x_data)
+    #         np.save(feature_dir + f"segmented_split.npy", y_set_segmented)
+    #         np.save(feature_dir + f"segmented_labels.npy", y_segmented)
+    #         np.save(feature_dir + f"segmented_index.npy", index_segmented)
+    #     else:
+    #         for audio_file in sound_dir_loc: 
+    #             data = get_split_signal_librosa("", audio_file[:-4], spectrogram=True, input_sec=pad_len_htsat[dataset], trim_tail=False, 
+    #                                             wavelet=configs.wavelet, wavelet_level=configs.wavelet_level, method=configs.method, normalized_modality=normalized_modality, wavelet_modality=configs.wavelet_modality)[0]
+    #             # print(data.shape)
+    #             x_data.append(data)
+    #         x_data = np.array(x_data)
+    #         np.save(spec_file_name, x_data)    
 
     seed = 42
 # chia train/val/test cho từng dataset
     if dataset == "icbhidisease":
-        x_data = np.load(feature_dir + f"segmented_spectrogram_pad{str(int(pad_len_htsat[dataset]))}" + suffix_dataset)
+        x_data = np.load(spec_file_name)
         y_label = np.load(feature_dir + f"segmented_labels.npy")
         index_sampled = np.load(feature_dir + f"segmented_index.npy")
         x_metadata = x_metadata[index_sampled]
     else:
-        x_data = np.load(feature_dir + f"spectrogram_pad{str(int(pad_len_htsat[dataset]))}" + suffix_dataset)
+        x_data = np.load(spec_file_name)
     print(len(x_data), len(x_metadata), len(y_label))
-    
+    print(spec_file_name)
     print(collections.Counter(y_label))
     
     if dataset == "covid19sounds":
