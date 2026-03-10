@@ -637,6 +637,7 @@ if __name__ == "__main__":
     parser.add_argument("--wavelet", type=str, default=None) # None, db4, db8, sym4, sym8, coif2, coif3
     parser.add_argument("--wavelet_modality", type=str, default="cough") # cough, breath, lung, all
     parser.add_argument("--wavelet_level", type=int, default=4) # 4, 5, 6
+    parser.add_argument("--threshold_mode", type=str, default="soft") # soft, hard
     parser.add_argument("--method", type=str, default="universal") # universal, bayesshrink, sureshrink
     parser.add_argument("--wandb_name", type=str, default="test")
 
@@ -656,4 +657,4 @@ if __name__ == "__main__":
         )
         train_RespLLM(args)
 
-    send_telegram_message("Mô hình đã train xong.")
+    # send_telegram_message("Mô hình đã train xong.")
