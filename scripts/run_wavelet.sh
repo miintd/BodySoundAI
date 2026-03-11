@@ -1,4 +1,5 @@
 #!/bin/bash
+BATCH_SIZE=${1:-16}
 
 set -euo pipefail
 
@@ -14,7 +15,7 @@ COMMON_ARGS=(
   --train_epochs 40
   --meta_val_interval 3
   --train_pct 1
-  --batch_size 16
+  --batch_size "$BATCH_SIZE"
   --threshold_mode "soft"
 )
 
