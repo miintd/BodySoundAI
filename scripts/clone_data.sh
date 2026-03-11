@@ -9,9 +9,11 @@ git sparse-checkout set datasets
 git pull
 mv datasets ../
 cd ..
+echo "Dataset cloned successfully."
 
 cd opera-data
 git sparse-checkout set feature
 git pull
 mv feature ../
 cd ..
+echo "Feature cloned successfully."
