@@ -19,6 +19,11 @@ from src.benchmark.RespLLM.util import test, get_dataloader, EarlyStopper, set_a
 # from src.benchmark.RespLLM.util import get_dataloader
 from src.benchmark.RespLLM.sampler import CategoriesSampler
 
+import os
+import wandb
+
+# Optionally set WANDB_API_KEY programmatically
+os.environ['WANDB_API_KEY'] = "redacted"
 
 # import pytorch_lightning as pl
 # from pytorch_lightning.callbacks import ModelCheckpoint
@@ -27,7 +32,6 @@ from src.benchmark.RespLLM.sampler import CategoriesSampler
 # from lightning.pytorch import seed_everything
 # from torchmetrics import AUROC
 scaler = torch.cuda.amp.GradScaler()
-token = "redacted"
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -561,12 +565,6 @@ def evaluate_RespLLM(configs):
 
 
 if __name__ == "__main__":
-    import os
-    import wandb
-
-    # Optionally set WANDB_API_KEY programmatically
-    os.environ['WANDB_API_KEY'] = "redacted"
-
     import argparse
     from pathlib import Path
     parser = argparse.ArgumentParser()
