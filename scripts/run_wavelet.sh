@@ -8,23 +8,21 @@ mkdir -p "$LOG_DIR"
 PYTHON_CMD="python src/benchmark/RespLLM/RespLLM.py"
 
 COMMON_ARGS=(
-  --llm_model GPT2
+  --llm_model gemma2B
   --train_tasks S1,S2,S3,S4,S5,S6,S7
   --test_tasks T1,T2,T3,T4,T5,T6
-  --train_epochs 1
+  --train_epochs 40
   --meta_val_interval 3
   --train_pct 1
   --batch_size 16
-  --llm_dim 768
-  --d_ff 768
   --threshold_mode "soft"
 )
 
 methods=("universal" "bayesshrink")
 
 # -----------------------------
-0) Baseline: no wavelet
------------------------------
+# 0) Baseline: no wavelet
+# -----------------------------
 run_name="baseline"
 echo "Running $run_name"
 
