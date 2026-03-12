@@ -19,7 +19,7 @@ COMMON_ARGS=(
   --threshold_mode "soft"
 )
 
-methods=("universal" "bayesshrink")
+methods=("bayesshrink")
 
 # -----------------------------
 # 0) Baseline: no wavelet
@@ -36,7 +36,7 @@ $PYTHON_CMD \
 # -----------------------------
 # 1) Ablation for cough
 # -----------------------------
-cough_wavelets=("db4" "sym4")
+cough_wavelets=("db4")
 cough_levels=(4 6)
 
 for w in "${cough_wavelets[@]}"
@@ -64,7 +64,7 @@ done
 # -----------------------------
 # 2) Ablation for breath
 # -----------------------------
-breath_wavelets=("db8" "sym8")
+breath_wavelets=("sym8")
 breath_levels=(4 6)
 
 for w in "${breath_wavelets[@]}"
@@ -92,7 +92,7 @@ done
 # -----------------------------
 # 3) Ablation for lung
 # -----------------------------
-lung_wavelets=("coif2" "coif3")
+lung_wavelets=("coif3")
 lung_levels=(4 6)
 
 for w in "${lung_wavelets[@]}"
