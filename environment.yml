@@ -1,4 +1,4 @@
-name: audio3
+name: audio
 channels:
   - defaults
 dependencies:
