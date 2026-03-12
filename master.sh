@@ -3,7 +3,7 @@
 # Danh sách các file cần quét
 FILES=(
     "src/benchmark/RespLLM/model.py"
-    "/home/tran-dam-quoc-khanh/Documents/DIEM_MY/OPERA/src/benchmark/RespLLM/RespLLM.py"
+    "src/benchmark/RespLLM/RespLLM.py"
 )
 
 echo "--- Checking tokens ---"
@@ -29,5 +29,5 @@ echo "Token valid. Continue."
 
 bash scripts/clone_data.sh
 source scripts/setup_env.sh
-bash scripts/run_audio_label.sh
-bash scripts/run_wavelet.sh
+bash scripts/run_audio_label.sh 
+bash scripts/run_wavelet.sh 
