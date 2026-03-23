@@ -5,5 +5,5 @@
 [ -d "feature" ] && rm -rf feature
 
 # clone the dataset
-wget https://huggingface.co/datasets/diemmii/opera-data/resolve/main/opera_dataset.zip
-unzip opera_dataset.zip
+wget https://huggingface.co/datasets/diemmii/opera-data/resolve/main/opera_data.zip
+unzip opera_data.zip
