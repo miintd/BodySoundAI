@@ -33,7 +33,7 @@ def preprocess_task2(modality="cough"):
             
         path = row["{}_path".format(modality)]
         path = path.replace("\\", "/") 
-        file = "/".join(["datasets/covid19-sounds/0426_EN_used_task2",
+        file = "/".join(["/media/tran-dam-quoc-khanh/76e48e08-7447-4a59-9252-9576a8b4097f/home/businessailab5/Downloads/backup/OPERA_data/covid19/NeurIPS data/task2/0426_EN_used_task2",
                          path])
                         # userID, folder, filename])
 

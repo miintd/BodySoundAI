@@ -28,6 +28,6 @@ done
 echo "Token valid. Continue."
 
 bash scripts/clone_data.sh
-source scripts/setup_env.sh
+# source scripts/setup_env.sh
 bash scripts/run_audio_label.sh 
-bash scripts/run_wavelet.sh 
+# bash scripts/run_wavelet.sh 

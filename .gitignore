@@ -1,10 +1,11 @@
 # datasets
 datasets/
 datasets1/
+opera-data/
 
 # features
 feature/
-feature_ori/
+feature_*/
 feature(1)/
 
 # logs
@@ -20,17 +21,13 @@ wandb/
 *.npz
 
 # python
-__pycache__/
-*.pyc
-*.pyo
+**/__pycache__/
+**/*.pyc
+**/*.pyo
 
 # checkpoints/weights
-cks/llm/
-*.pt
-*.pth
-*.ckpt
-*.bin
-*.safetensors
+cks/llm/*.pt
+
 
 # system
 .DS_Store
@@ -38,3 +35,10 @@ Thumbs.db
 
 # generated images
 output.png
+
+# original files
+src/benchmark/RespLLM/
+model_ori.py
+RespLLM_ori.py
+util_ori.py
+util_w.py

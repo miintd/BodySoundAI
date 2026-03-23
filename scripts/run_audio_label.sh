@@ -1,28 +1,69 @@
 #!/bin/bash
 
-BATCH_SIZE=${1:-16}
-
 mkdir -p logs_1
 
+LLM_MODELS=("gemma2B" "phi" "mistral" "llama")
+NUM_RUNS=3
+BATCH_SIZE=${1:-16}
+
+# Mapping hidden size theo từng model
+get_llm_dim() {
+    case "$1" in
+        gemma2B) echo 2048 ;;
+        phi)     echo 3072 ;;
+        mistral) echo 4096 ;;
+        llama)   echo 4096 ;;
+        GPT2)    echo 768  ;;  # fallback mặc định
+    esac
+}
+
 # no audio label
-python src/benchmark/RespLLM/RespLLM.py \
-        --llm_model gemma2B \
-        --train_tasks S1,S2,S3,S4,S5,S6,S7 \
-        --test_tasks T1,T2,T3,T4,T5,T6 \
-        --train_epochs 40 \
-        --meta_val_interval 3 \
-        --train_pct 1 \
-        --batch_size $BATCH_SIZE \
-        2>&1 | tee -a logs_1/out_RespLLM_gemma2B.txt
+for MODEL in "${LLM_MODELS[@]}"; do
+    LLM_DIM=$(get_llm_dim "$MODEL")
+
+    for ((RUN=1; RUN<=NUM_RUNS; RUN++)); do
+        run_name="${MODEL}_run${RUN}"
+        echo "  Model: $MODEL | Run: $RUN / $NUM_RUNS | llm_dim: $LLM_DIM"
+
+        python src/benchmark/RespLLM/RespLLM.py \
+            --llm_model "$MODEL" \
+            --train_tasks S1,S2,S3,S4,S5,S6,S7 \
+            --test_tasks T1,T2,T3,T4,T5,T6 \
+            --train_epochs 60 \
+            --meta_val_interval 3 \
+            --train_pct 1 \
+            --batch_size "$BATCH_SIZE" \
+            --llm_dim "$LLM_DIM" \
+            --d_ff "$LLM_DIM" \
+            --wandb_name "$run_name" \
+            2>&1 | tee -a logs_1/out_${MODEL}_${RUN}.txt
+
+        echo "  Done: $MODEL run $RUN"
+    done
+done
 
 # with audio label
-python src/benchmark/RespLLM/RespLLM.py \
-        --llm_model gemma2B \
-        --train_tasks S1,S2,S3,S4,S5,S6,S7 \
-        --test_tasks T1,T2,T3,T4,T5,T6 \
-        --train_epochs 40 \
-        --meta_val_interval 3 \
-        --train_pct 1 \
-        --batch_size $BATCH_SIZE \
-        --use_audiolabel \
-        2>&1 | tee -a logs_1/out_RespLLM_gemma2B_audiolabel.txt
+for MODEL in "${LLM_MODELS[@]}"; do
+    LLM_DIM=$(get_llm_dim "$MODEL")
+
+    for ((RUN=1; RUN<=NUM_RUNS; RUN++)); do
+        run_name="${MODEL}_audio_label_run${RUN}"
+        echo "  Model: $MODEL | Run: $RUN / $NUM_RUNS | llm_dim: $LLM_DIM"
+
+        python src/benchmark/RespLLM/RespLLM.py \
+            --llm_model "$MODEL" \
+            --train_tasks S1,S2,S3,S4,S5,S6,S7 \
+            --test_tasks T1,T2,T3,T4,T5,T6 \
+            --train_epochs 60 \
+            --meta_val_interval 3 \
+            --train_pct 1 \
+            --batch_size "$BATCH_SIZE" \
+            --llm_dim "$LLM_DIM" \
+            --d_ff "$LLM_DIM" \
+            --use_audiolabel \
+            --wandb_name "$run_name" \
+            2>&1 | tee -a logs_1/out_${MODEL}_audiolabel_${RUN}.txt
+
+        echo "  Done: $MODEL run $RUN"
+    done
+done
