@@ -37,8 +37,5 @@ Thumbs.db
 output.png
 
 # original files
-src/benchmark/RespLLM/
-model_ori.py
-RespLLM_ori.py
-util_ori.py
-util_w.py
+src/benchmark/RespLLM/*_ori.py
+src/benchmark/RespLLM/util_w.py
