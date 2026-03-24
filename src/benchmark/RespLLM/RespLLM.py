@@ -23,7 +23,7 @@ import os
 import wandb
 
 # Optionally set WANDB_API_KEY programmatically
-os.environ['WANDB_API_KEY'] = "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"
+os.environ['WANDB_API_KEY'] = "redacted"
 
 # import pytorch_lightning as pl
 # from pytorch_lightning.callbacks import ModelCheckpoint
