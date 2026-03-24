@@ -9,7 +9,7 @@ BATCH_SIZE=${1:-16}
 # Mapping hidden size theo từng model
 get_llm_dim() {
     case "$1" in
-        gemma2B) echo 2048 ;;
+        gemma2B) echo 2304 ;;
         phi)     echo 3072 ;;
         mistral) echo 4096 ;;
         llama)   echo 4096 ;;
