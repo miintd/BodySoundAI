@@ -1,5 +1,5 @@
 #!/bin/bash
-
+mkdir -p cks/llm cks/original
 # Danh sách các file cần quét
 FILES=(
     "src/benchmark/RespLLM/model.py"
