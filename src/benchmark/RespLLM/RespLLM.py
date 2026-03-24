@@ -23,7 +23,7 @@ import os
 import wandb
 
 # Optionally set WANDB_API_KEY programmatically
-os.environ['WANDB_API_KEY'] = "readacted"
+os.environ['WANDB_API_KEY'] = "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"
 
 # import pytorch_lightning as pl
 # from pytorch_lightning.callbacks import ModelCheckpoint
@@ -646,7 +646,7 @@ if __name__ == "__main__":
         evaluate_RespLLM(args)
     else:
         wandb.init(
-            project=getattr(args, "wandb_project", "RespLLM_test"),
+            project=getattr(args, "wandb_project", "RespLLM_test_1"),
             name=getattr(args, "wandb_name", "test"),#"lowres_46_dynamic_"), #"Spread+MLP"
             config=vars(args)
         )

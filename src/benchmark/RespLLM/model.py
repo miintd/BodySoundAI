@@ -15,7 +15,7 @@ import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 transformers.logging.set_verbosity_error()
 
-token = "readacted"
+token = "redacted"
 
 # giúp xác định phần nào cần fine-tuning
 OPERA_CT_TARGET_MODULES = ["qkv", "proj"]
