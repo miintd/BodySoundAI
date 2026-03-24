@@ -2,7 +2,7 @@
 
 mkdir -p logs_1
 
-LLM_MODELS=("gemma2B" "phi" "mistral" "llama")
+LLM_MODELS=("gemma2B" "phi" "mistral" "llama" "deepseek-moe" "qwen-moe")
 NUM_RUNS=3
 BATCH_SIZE=${1:-16}
 
@@ -13,7 +13,8 @@ get_llm_dim() {
         phi)     echo 3072 ;;
         mistral) echo 4096 ;;
         llama)   echo 4096 ;;
-        GPT2)    echo 768  ;;  # fallback mặc định
+        deepseek-moe) echo 2048 ;;
+        qwen-moe) echo 2048 ;;
     esac
 }
 
