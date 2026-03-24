@@ -337,8 +337,25 @@ class RespLLM(nn.Module):
             model_id = "google/gemma-2-9b"
             self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
             self.llm_model = AutoModel.from_pretrained(model_id, token = token)
+        elif configs.llm_model == 'deepseek-moe':
+            model_id = "deepseek-ai/deepseek-moe-16b-base"
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model_id, trust_remote_code=True
+            )
+            self.llm_model = AutoModel.from_pretrained(
+                model_id, trust_remote_code=True
+            )
+        elif configs.llm_model == 'qwen-moe':
+            model_id = "Qwen/Qwen1.5-MoE-A2.7B"  # hoặc model Qwen MoE khác
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                model_id, trust_remote_code=True
+            )
+            self.llm_model = AutoModel.from_pretrained(
+                model_id, trust_remote_code=True
+            )
         else:
             raise NotImplementedError('LLM model is not defined')
+        
         # thêm pad token để các token đưa vào có cùng độ dài
         if self.tokenizer.eos_token: # token để kết thúc câu
             self.tokenizer.pad_token = self.tokenizer.eos_token
