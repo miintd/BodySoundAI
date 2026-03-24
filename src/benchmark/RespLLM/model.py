@@ -343,7 +343,7 @@ class RespLLM(nn.Module):
                 model_id, trust_remote_code=True
             )
             self.llm_model = AutoModel.from_pretrained(
-                model_id, trust_remote_code=True
+                model_id, trust_remote_code=True, torch_dtype=torch.bfloat16
             )
         elif configs.llm_model == 'qwen-moe':
             model_id = "Qwen/Qwen1.5-MoE-A2.7B"  # hoặc model Qwen MoE khác
@@ -351,7 +351,7 @@ class RespLLM(nn.Module):
                 model_id, trust_remote_code=True
             )
             self.llm_model = AutoModel.from_pretrained(
-                model_id, trust_remote_code=True
+                model_id, trust_remote_code=True, torch_dtype=torch.bfloat16
             )
         else:
             raise NotImplementedError('LLM model is not defined')
@@ -589,6 +589,8 @@ class RespLLM(nn.Module):
         context = self.tokenizer(x_context, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
         context_embeddings = self.llm_model.get_input_embeddings()(context.to(x_enc.device))  # (batch, prompt_token, dim)
 
+        llm_dtype = prompt_embeddings.dtype
+
         if self.modal_embs is not None:
             modality_vec = self._encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
 
@@ -596,6 +598,8 @@ class RespLLM(nn.Module):
         # print("prompt_embeddings shape:", prompt_embeddings.shape)
         # print("context_embeddings shape:", context_embeddings.shape)
         # print("modality_vector shape:", modality_vec.shape)
+        
+        enc_out = enc_out.to(dtype=llm_dtype)
 
         if self.use_audio:
             llama_enc_out = torch.cat([prompt_embeddings, context_embeddings, enc_out], dim=1)
@@ -608,6 +612,8 @@ class RespLLM(nn.Module):
         # print("dec_out shape after slicing:", dec_out.shape)
         dec_out = dec_out.permute(0, 2, 1).contiguous()
         # print("dec_out shape before flatten head:", dec_out.shape)
+        
+        dec_out = dec_out.to(dtype=torch.float32)
 
         if self.modal_embs == "projected_concat":
             # print("Using modality embeddings for classification")
