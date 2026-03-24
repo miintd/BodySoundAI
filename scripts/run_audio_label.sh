@@ -24,6 +24,12 @@ for MODEL in "${LLM_MODELS[@]}"; do
 
     for ((RUN=1; RUN<=NUM_RUNS; RUN++)); do
         run_name="${MODEL}_run${RUN}"
+        LOG_FILE="logs_1/out_${MODEL}_${RUN}.txt"
+        
+        if [ -f "$LOG_FILE" ]; then
+            echo "  [SKIP] Log file $LOG_FILE exists. Skipping $MODEL run $RUN."
+            continue
+        fi
         echo "  Model: $MODEL | Run: $RUN / $NUM_RUNS | llm_dim: $LLM_DIM"
 
         python src/benchmark/RespLLM/RespLLM.py \
@@ -49,6 +55,12 @@ for MODEL in "${LLM_MODELS[@]}"; do
 
     for ((RUN=1; RUN<=NUM_RUNS; RUN++)); do
         run_name="${MODEL}_audio_label_run${RUN}"
+        LOG_FILE="logs_1/out_${MODEL}_audiolabel_${RUN}.txt"
+        
+        if [ -f "$LOG_FILE" ]; then
+            echo "  [SKIP] Log file $LOG_FILE exists. Skipping $MODEL (audiolabel) run $RUN."
+            continue
+        fi
         echo "  Model: $MODEL | Run: $RUN / $NUM_RUNS | llm_dim: $LLM_DIM"
 
         python src/benchmark/RespLLM/RespLLM.py \
