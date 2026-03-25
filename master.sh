@@ -32,5 +32,5 @@ bash scripts/clone_data.sh
 # Kích hoạt môi trường conda
 eval "$(conda shell.bash hook)"
 conda activate audio
-bash scripts/run_audio_label.sh "$1"
+bash scripts/run_audio_label.sh "$1" "$2"
 # bash scripts/run_wavelet.sh 

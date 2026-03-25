@@ -1,10 +1,11 @@
 #!/bin/bash
 
-mkdir -p logs_1
+mkdir -p logs_2
 
 LLM_MODELS=("gemma2B" "phi" "mistral" "llama" "deepseek-moe" "qwen-moe")
 NUM_RUNS=3
 BATCH_SIZE=${1:-16}
+LR = ${2:-1e-4}
 
 # Mapping hidden size theo từng model
 get_llm_dim() {
@@ -24,7 +25,7 @@ for MODEL in "${LLM_MODELS[@]}"; do
 
     for ((RUN=1; RUN<=NUM_RUNS; RUN++)); do
         run_name="${MODEL}_run${RUN}"
-        LOG_FILE="logs_1/out_${MODEL}_${RUN}.txt"
+        LOG_FILE="logs_2/out_${MODEL}_${RUN}.txt"
         
         if [ -f "$LOG_FILE" ]; then
             echo "  [SKIP] Log file $LOG_FILE exists. Skipping $MODEL run $RUN."
@@ -40,10 +41,11 @@ for MODEL in "${LLM_MODELS[@]}"; do
             --meta_val_interval 3 \
             --train_pct 1 \
             --batch_size "$BATCH_SIZE" \
+            --lr "$LR" \
             --llm_dim "$LLM_DIM" \
             --d_ff "$LLM_DIM" \
             --wandb_name "$run_name" \
-            2>&1 | tee -a logs_1/out_${MODEL}_${RUN}.txt
+            2>&1 | tee -a logs_2/out_${MODEL}_${RUN}.txt
 
         echo "  Done: $MODEL run $RUN"
     done
@@ -55,7 +57,7 @@ for MODEL in "${LLM_MODELS[@]}"; do
 
     for ((RUN=1; RUN<=NUM_RUNS; RUN++)); do
         run_name="${MODEL}_audio_label_run${RUN}"
-        LOG_FILE="logs_1/out_${MODEL}_audiolabel_${RUN}.txt"
+        LOG_FILE="logs_2/out_${MODEL}_audiolabel_${RUN}.txt"
         
         if [ -f "$LOG_FILE" ]; then
             echo "  [SKIP] Log file $LOG_FILE exists. Skipping $MODEL (audiolabel) run $RUN."
@@ -71,11 +73,12 @@ for MODEL in "${LLM_MODELS[@]}"; do
             --meta_val_interval 3 \
             --train_pct 1 \
             --batch_size "$BATCH_SIZE" \
+            --lr "$LR" \
             --llm_dim "$LLM_DIM" \
             --d_ff "$LLM_DIM" \
             --use_audiolabel \
             --wandb_name "$run_name" \
-            2>&1 | tee -a logs_1/out_${MODEL}_audiolabel_${RUN}.txt
+            2>&1 | tee -a logs_2/out_${MODEL}_audiolabel_${RUN}.txt
 
         echo "  Done: $MODEL run $RUN"
     done
