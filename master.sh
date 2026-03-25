@@ -27,7 +27,7 @@ done
 
 echo "Token valid. Continue."
 
-bash scripts/clone_data.sh
+# bash scripts/clone_data.sh
 # source scripts/setup_env.sh
 # Kích hoạt môi trường conda
 eval "$(conda shell.bash hook)"
