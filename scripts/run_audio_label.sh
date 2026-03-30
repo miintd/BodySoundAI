@@ -5,7 +5,7 @@ mkdir -p logs_3
 LLM_MODELS=("gemma2B" "phi" "mistral" "llama" "deepseek-moe" "qwen-moe")
 # LLM_MODELS=("GPT2")
 NUM_RUNS=3
-BATCH_SIZE=${1:-16}
+BATCH_SIZE=${1:-4}
 
 # Mapping hidden size theo từng model
 get_llm_dim() {
