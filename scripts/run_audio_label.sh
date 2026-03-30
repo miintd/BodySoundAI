@@ -3,13 +3,14 @@
 mkdir -p logs_3
 
 LLM_MODELS=("gemma2B" "phi" "mistral" "llama" "deepseek-moe" "qwen-moe")
-NUM_RUNS=3
+# LLM_MODELS=("GPT2")
+NUM_RUNS=1
 BATCH_SIZE=${1:-16}
-LR = ${2:-1e-4}
 
 # Mapping hidden size theo từng model
 get_llm_dim() {
     case "$1" in
+        GPT2) echo 768 ;;
         gemma2B) echo 2304 ;;
         phi)     echo 3072 ;;
         mistral) echo 4096 ;;
@@ -28,8 +29,16 @@ for MODEL in "${LLM_MODELS[@]}"; do
         LOG_FILE="logs_3/out_${MODEL}_${RUN}.txt"
         
         if [ -f "$LOG_FILE" ]; then
-            echo "  [SKIP] Log file $LOG_FILE exists. Skipping $MODEL run $RUN."
-            continue
+            if grep -q "torch.cuda.OutOfMemoryError\|CUDA out of memory" "$LOG_FILE"; then
+                echo "[OOM] Re-running $MODEL run $RUN"
+                rm "$LOG_FILE"
+            elif grep -q "Traceback" "$LOG_FILE"; then
+                echo "[ERROR] Re-running $MODEL run $RUN (non-OOM error)"
+                rm "$LOG_FILE"
+            else
+                echo "[SKIP] $MODEL run $RUN (assumed success)"
+                continue
+            fi
         fi
         echo "  Model: $MODEL | Run: $RUN / $NUM_RUNS | llm_dim: $LLM_DIM"
 
@@ -41,7 +50,6 @@ for MODEL in "${LLM_MODELS[@]}"; do
             --meta_val_interval 3 \
             --train_pct 1 \
             --batch_size "$BATCH_SIZE" \
-            --lr "$LR" \
             --llm_dim "$LLM_DIM" \
             --d_ff "$LLM_DIM" \
             --wandb_name "$run_name" \
@@ -60,8 +68,16 @@ for MODEL in "${LLM_MODELS[@]}"; do
         LOG_FILE="logs_3/out_${MODEL}_audiolabel_${RUN}.txt"
         
         if [ -f "$LOG_FILE" ]; then
-            echo "  [SKIP] Log file $LOG_FILE exists. Skipping $MODEL (audiolabel) run $RUN."
-            continue
+            if grep -q "torch.cuda.OutOfMemoryError\|CUDA out of memory" "$LOG_FILE"; then
+                echo "[OOM] Re-running $MODEL (audiolabel) run $RUN"
+                rm "$LOG_FILE"
+            elif grep -q "Traceback" "$LOG_FILE"; then
+                echo "[ERROR] Re-running $MODEL (audiolabel) run $RUN (non-OOM error)"
+                rm "$LOG_FILE"
+            else
+                echo "[SKIP] $MODEL (audiolabel) run $RUN (assumed success)"
+                continue
+            fi
         fi
         echo "  Model: $MODEL | Run: $RUN / $NUM_RUNS | llm_dim: $LLM_DIM"
 
@@ -73,13 +89,12 @@ for MODEL in "${LLM_MODELS[@]}"; do
             --meta_val_interval 3 \
             --train_pct 1 \
             --batch_size "$BATCH_SIZE" \
-            --lr "$LR" \
             --llm_dim "$LLM_DIM" \
             --d_ff "$LLM_DIM" \
             --use_audiolabel \
             --wandb_name "$run_name" \
             2>&1 | tee -a logs_3/out_${MODEL}_audiolabel_${RUN}.txt
 
-        echo "  Done: $MODEL run $RUN"
+        echo "  Done: $MODEL (audiolabel) run $RUN"
     done
 done
