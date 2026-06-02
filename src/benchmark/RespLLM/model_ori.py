@@ -323,6 +323,26 @@ class RespLLM(nn.Module):
             model_id = "google/gemma-2-9b"
             self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
             self.llm_model = AutoModel.from_pretrained(model_id, token = token)
+        elif configs.llm_model == "DistilGPT2":
+            model_id = "distilgpt2"
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
+            self.llm_model = AutoModel.from_pretrained(model_id, token = token)
+            print("Loading DistilGPT2")
+        elif configs.llm_model == "GPTNeo125M":
+            model_id = "EleutherAI/gpt-neo-125M"
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
+            self.llm_model = AutoModel.from_pretrained(model_id, token = token)
+            print("Loading GPT-Neo 125M")
+        elif configs.llm_model == "GPTNeo1.3B":
+            model_id = "EleutherAI/gpt-neo-1.3B"
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
+            self.llm_model = AutoModel.from_pretrained(model_id, token = token)
+            print("Loading GPT-Neo 1.3B")
+        elif configs.llm_model == "GPT2Medium":
+            model_id = "openai-community/gpt2-medium"
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
+            self.llm_model = AutoModel.from_pretrained(model_id, token = token)
+            print("Loading GPT-2 Medium (1.5B)")
         else:
             raise NotImplementedError('LLM model is not defined')
 

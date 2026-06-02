@@ -408,9 +408,22 @@ if __name__ == "__main__":
 
     parser.add_argument("--val_S3_S4", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--full_dataset", type=bool, default=False)
+    
+    # Credentials from arguments
+    parser.add_argument("--hf_token", type=str, default=None, help="HuggingFace API token")
+    parser.add_argument("--wandb_key", type=str, default=None, help="Weights & Biases API key")
 
     args = parser.parse_args()
     print(args)
+    
+    # Set credentials from arguments
+    if args.hf_token:
+        os.environ['HF_TOKEN'] = args.hf_token
+        from huggingface_hub import login
+        login(token=args.hf_token, add_to_git_credential=False)
+    
+    if args.wandb_key:
+        os.environ['WANDB_API_KEY'] = args.wandb_key
 
     args.train_tasks = args.train_tasks.split(",")
     args.test_tasks = args.test_tasks.split(",")

@@ -1,9 +1,34 @@
 #!/bin/bash
-# mkdir -p logs_llm_fixed_seed
+# Usage: bash scripts/add_modal_embs.sh [MODE] [BATCH_SIZE] [HF_TOKEN] [WANDB_KEY]
+# MODE: "full" (default) or "covid"
+# Example: bash scripts/add_modal_embs.sh full 2 "hf_xxxxx" "wandb_xxxxx"
+# Example: bash scripts/add_modal_embs.sh covid 2 "hf_xxxxx" "wandb_xxxxx"
+
+MODE=${1:-full}
+BATCH_SIZE=${2:-2}
+HF_TOKEN=${3:-""}
+WANDB_KEY=${4:-""}
+
+# Set tasks and log directory based on mode
+if [ "$MODE" = "covid" ]; then
+    TRAIN_TASKS="S1,S2,S3,S4"
+    TEST_TASKS="T1,T2,T3,T4"
+    LOG_DIR="logs_llm_fixed_seed/COVID"
+else
+    TRAIN_TASKS="S1,S2,S3,S4,S5,S6,S7"
+    TEST_TASKS="T1,T2,T3,T4,T5,T6"
+    LOG_DIR="logs_llm_fixed_seed"
+fi
+
+mkdir -p "$LOG_DIR"
+echo "Running in $MODE mode"
+echo "  Train tasks: $TRAIN_TASKS"
+echo "  Test tasks: $TEST_TASKS"
+echo "  Log directory: $LOG_DIR"
 
 encoder=("learnable" "llm_embeddings")
 
-LLM_MODELS=("GPT2" "gemma2B")
+LLM_MODELS=("gemma2B")
 NUM_RUNS=1
 
 get_llm_dim() {
@@ -18,17 +43,17 @@ get_llm_dim() {
     esac
 }
 
-get_batch_size() {
-    case "$1" in
-        GPT2) echo 16 ;;
-        gemma2B) echo 2 ;;
-        phi)     echo 1 ;;
-        mistral) echo 1 ;;
-        llama)   echo 1 ;;
-        deepseek-moe) echo 1 ;;
-        qwen-moe) echo 1 ;;
-    esac
-}
+# get_batch_size() {
+#     case "$1" in
+#         GPT2) echo 16 ;;
+#         gemma2B) echo 2 ;;
+#         phi)     echo 1 ;;
+#         mistral) echo 1 ;;
+#         llama)   echo 1 ;;
+#         deepseek-moe) echo 1 ;;
+#         qwen-moe) echo 1 ;;
+#     esac
+# }
 
 # ########################################
 # # 3. FEATURE MODE 
@@ -64,11 +89,11 @@ get_batch_size() {
 echo "Running RAW CONCAT mode"
 for MODEL in "${LLM_MODELS[@]}"; do
     LLM_DIM=$(get_llm_dim "$MODEL")
-    BATCH_SIZE=$(get_batch_size "$MODEL")
+    # BATCH_SIZE=$(get_batch_size "$MODEL")
     for ((RUN=1;RUN<=NUM_RUNS; RUN++)); do    
         echo "Model: $MODEL | Run $RUN/$NUM_RUNS"
         for enc in "${encoder[@]}"; do
-        LOG_FILE="logs_llm_fix_seed/out_${MODEL}_${enc}_${RUN}_early_fusion.txt"
+        LOG_FILE="$LOG_DIR/out_${MODEL}_${enc}_${RUN}_early_fusion.txt"
 
         if [ -f "$LOG_FILE" ]; then
             if grep -q "torch.cuda.OutOfMemoryError\|CUDA out of memory" "$LOG_FILE"; then
@@ -83,11 +108,11 @@ for MODEL in "${LLM_MODELS[@]}"; do
             fi
         fi
             echo "Running RAW CONCAT mode with encoder: $enc"
-            run_name="raw_concat_${enc}_run${RUN}"
+            run_name="raw_concat_${enc}_run${RUN}_${MODE}"
             python src/benchmark/RespLLM/RespLLM.py \
                 --llm_model $MODEL \
-                --train_tasks S1,S2,S3,S4,S5,S6,S7 \
-                --test_tasks T1,T2,T3,T4,T5,T6 \
+                --train_tasks "$TRAIN_TASKS" \
+                --test_tasks "$TEST_TASKS" \
                 --train_epochs 60 \
                 --meta_val_interval 3 \
                 --meta_val_shot 20 \
@@ -98,7 +123,8 @@ for MODEL in "${LLM_MODELS[@]}"; do
                 --modality_encoder_type "$enc" \
                 --modal_embs raw_concat \
                 --wandb_name "$run_name" \
-                --use_8bit_quantization \
+                ${HF_TOKEN:+--hf_token "$HF_TOKEN"} \
+                ${WANDB_KEY:+--wandb_key "$WANDB_KEY"} \
                 2>&1 | tee -a "$LOG_FILE"
         done
     done
