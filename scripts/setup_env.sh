@@ -16,4 +16,4 @@ conda env create -f environment.yml
 echo ""
 echo "Activating environment..."
 source $(conda info --base)/etc/profile.d/conda.sh
-conda activate audio
+conda activate audio2
