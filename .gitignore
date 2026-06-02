@@ -26,8 +26,8 @@ wandb/
 **/*.pyo
 
 # checkpoints/weights
-cks/llm/*.pt
-
+cks/
+*.pth
 
 # system
 .DS_Store
@@ -37,5 +37,16 @@ Thumbs.db
 output.png
 
 # original files
-src/benchmark/RespLLM/*_ori.py
+src/benchmark/RespLLM/model_bts.py
+src/benchmark/RespLLM/model_clap.py
+src/benchmark/RespLLM/model_copy.py
+src/benchmark/RespLLM/cnn_*.py
+src/benchmark/RespLLM/RespLLM_copy.py
 src/benchmark/RespLLM/util_w.py
+src/benchmark/RespLLM__/
+metadata_quality_check.ipynb
+loss_out_csv.py
+loss_out_csv_1.py
+RespLLM.zip
+bts/
+torchvggish/

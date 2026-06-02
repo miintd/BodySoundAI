@@ -10,7 +10,8 @@ from src.util import get_entire_signal_librosa
 import os
 
 feature_dir = "feature/coswara_eval/"  # "datasets/Coswara-Data/coswara_eval/"
-data_dir = "datasets/Coswara-Data/Extracted_data/"
+# data_dir = "datasets/Coswara-Data/Extracted_data/"
+data_dir = "/media/tran-dam-quoc-khanh/76e48e08-7447-4a59-9252-9576a8b4097f/home/businessailab5/Downloads/backup/OPERA_data/Coswara-Data/Extracted_data/"
 
 
 def check_data_dir():
@@ -122,7 +123,7 @@ def preprocess_label(label="sex"):
                 filename_list.append(filename)
 
         print(collections.Counter(label_list))
-        np.save(feature_dir + "{}_label_{}.npy".format(label, modality), label_list)
+        # np.save(feature_dir + "{}_label_{}.npy".format(label, modality), label_list)
         np.save(
             feature_dir + "entireaudio_filenames_{}_w_{}.npy".format(modality, label), filename_list)
 
@@ -337,10 +338,10 @@ if __name__ == '__main__':
         os.makedirs(feature_dir)
     #     preprocess_split_google()
 
-    for label in ["sex", "covid"]:
-        preprocess_label(label)
-        for modality in ["breathing", "cough"]:
-            preprocess_modality(modality,label)
+        for label in ["covid"]:
+            preprocess_label(label)
+            for modality in ["breathing", "cough"]:
+                preprocess_modality(modality,label)
 
     #     #  run once
     #     for label in ["sex", "smoker"]:

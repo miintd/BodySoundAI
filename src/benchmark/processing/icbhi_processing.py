@@ -31,7 +31,7 @@ if not os.path.exists(audio_dir):
 
 def process_disease():
     sound_dir_loc = np.array(
-        gb.glob("datasets/icbhi/ICBHI_final_database/*.wav"))
+        gb.glob("/media/tran-dam-quoc-khanh/76e48e08-7447-4a59-9252-9576a8b4097f/home/businessailab5/Downloads/backup/OPERA_data/icbhi/ICBHI_final_database/*.wav"))
     labels = []
     filenames = []
     split = []
@@ -99,7 +99,7 @@ if __name__ == '__main__':
 
     if not os.path.exists(feature_dir):
         os.makedirs(feature_dir)
-        process_disease()
+    process_disease()
 
     # if args.pretrain in ["vggish", "opensmile", "clap", "audiomae"]:
     #     extract_and_save_embeddings_baselines(args.pretrain)

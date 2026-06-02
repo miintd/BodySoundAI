@@ -28,7 +28,7 @@ import torch.optim as optim
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 class AudioDataset(torch.utils.data.Dataset):
-    def __init__(self, data, from_npy=False,  from_audio=False):
+    def __init__(self, data, from_npy=False, from_audio=False):
         self.data = data[0]
         self.label = data[1]
         self.from_npy = from_npy
@@ -38,7 +38,7 @@ class AudioDataset(torch.utils.data.Dataset):
         return len(self.data)
 
     def __getitem__(self, idx):
-        if self.from_npy:
+        if  self.from_npy:
             npy_path = self.data[idx]
             x = np.load(npy_path + ".npy")
         else:
@@ -49,7 +49,7 @@ class AudioDataset(torch.utils.data.Dataset):
         if self.from_audio:
             return x, label
 
-        x = torch.tensor(x, dtype=torch.float)
+        x = torch.tensor(x, dtype=torch.float) if not isinstance(x, torch.Tensor) else x
         label = torch.tensor(label, dtype=torch.long)
 
         return x, label
@@ -131,11 +131,11 @@ def get_dataloader(configs, task, deft_seed=None, sample=False):
     seed = 42
 
     if dataset == "icbhidisease":
-        x_data = np.load(feature_dir + f"segmented_spectrogram_pad{str(int(pad_len_htsat[dataset]))}" + suffix_dataset)
-        y_label = np.load(feature_dir + f"segmented_labels.npy")
+        x_data = np.load(feature_dir + f"vggish_segmented_spectrogram_pad{str(int(pad_len_htsat[dataset]))}" + suffix_dataset)
+        y_label = np.load(feature_dir + f"vggish_segmented_labels.npy")
         # index_sampled = np.load(feature_dir + f"segmented_index.npy")
     else:
-        x_data = np.load(feature_dir + f"spectrogram_pad{str(int(pad_len_htsat[dataset]))}" + suffix_dataset)
+        x_data = np.load(feature_dir + f"vggish_spectrogram_pad{str(int(pad_len_htsat[dataset]))}" + suffix_dataset)
     
     print(len(x_data), len(y_label))
     print(collections.Counter(y_label))

@@ -23,7 +23,7 @@ FEATURE_DIRS = {
     "coswara": "feature/coswara_eval/",
     "coviduk": "feature/coviduk_eval/",
     "kauh": "feature/kauh_eval/",
-    "icbhidisease": "feature/icbhidisease_eval/",
+    "icbhidisease": "feature/icbhidisease_eval_edited/",
 }
 
 PAD_LEN_HTSAT = {
@@ -317,4 +317,12 @@ def generate_ablations(selected_tasks=None):
 if __name__ == "__main__":
     # generate_baselines_once() 
     # generate_ablations()
-    generate_ablations(selected_tasks=["S5","S6"])
+    # generate_ablations(selected_tasks=["S7"])
+    generate_one_task(
+        task="S7",
+        wavelet=None,
+        wavelet_modality="lung",
+        wavelet_level=6,
+        threshold_mode="soft",
+        method="universal",
+    )

@@ -2,7 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from transformers import LlamaConfig, LlamaModel, LlamaTokenizer, GPT2Config, GPT2Model, GPT2Tokenizer, BertConfig, BertModel, BertTokenizer, AutoTokenizer, AutoModelForCausalLM, AutoModel
+from transformers import LlamaConfig, LlamaModel, LlamaTokenizer, GPT2Config, GPT2Model, GPT2Tokenizer, BertConfig, BertModel, BertTokenizer, AutoTokenizer, AutoModelForCausalLM, AutoModel, BitsAndBytesConfig
 import transformers
 from peft import LoraConfig, TaskType, get_peft_model, IA3Config
 import logging
@@ -15,7 +15,7 @@ import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 transformers.logging.set_verbosity_error()
 
-token = "redacted"
+token = ""
 
 # giúp xác định phần nào cần fine-tuning
 OPERA_CT_TARGET_MODULES = ["qkv", "proj"]
@@ -38,22 +38,6 @@ class FlattenHead(nn.Module):
         x = self.linear(x)
         x = self.dropout(x)
         return x
-    
-class FeatureHead(nn.Module):
-    def __init__(self, nf, out_feature_dim, head_dropout=0):
-        super().__init__()
-        self.proj = FlattenHead(nf, out_feature_dim, head_dropout)
-
-    def forward(self, x, no_fc=False):
-        return self.proj(x, no_fc=no_fc)
-    
-class ClassifierHead(nn.Module):
-    def __init__(self, in_dim, n_cls):
-        super().__init__()
-        self.fc = nn.Linear(in_dim, n_cls)
-
-    def forward(self, x):
-        return self.fc(x)
 
 class RespLLM(nn.Module):
     
@@ -80,7 +64,7 @@ class RespLLM(nn.Module):
         self.llm_lora_dropout = configs.llm_lora_dropout # tỉ lệ dropout cho các ma trận LoRA
 
         self.use_audio = configs.use_audio # boolean xác định mô hình có sử dụng đầu vào audio trong FF không
-        self.modal_embs = configs.modal_embs # boolean xác định có sử dụng embedding của modality hay không
+        self.use_context_ = configs.use_context_ # boolean xác định mô hình có sử dụng context embeddings trong FF không
 
         if configs.llm_model == 'llama':
             # self.llama_config = LlamaConfig.from_pretrained('meta-llama/Meta-Llama-3-8B') 
@@ -305,20 +289,6 @@ class RespLLM(nn.Module):
                     trust_remote_code=True,
                     local_files_only=False
                 )
-        # elif configs.llm_model == 'mistral':
-        #     model_id = "/home/tran-dam-quoc-khanh/Documents/DIEM_MY/Mistral-7B-v0.1"
-        #     self.tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
-        #     self.llm_model = AutoModel.from_pretrained(model_id, local_files_only=True, load_in_4bit=True)
-        # elif configs.llm_model == 'phi':
-        #     model_id = "/home/tran-dam-quoc-khanh/Documents/DIEM_MY/Phi-3.5-mini-instruct"
-        #     self.tokenizer = AutoTokenizer.from_pretrained(model_id, local_files_only=True)
-        #     self.llm_model = AutoModel.from_pretrained(model_id, local_files_only=True, load_in_8bit=True)
-        # elif configs.llm_model == "gemma2B":
-        #     # model_id = "google/gemma-2-2b-it"
-        #     model_id = "/home/tran-dam-quoc-khanh/Documents/DIEM_MY/gemma-2-2b"
-        #     self.tokenizer = AutoTokenizer.from_pretrained(model_id,local_files_only=True)
-        #     #self.llm_model = AutoModel.from_pretrained(model_id)
-        #     self.llm_model = AutoModel.from_pretrained(model_id, local_files_only=True, device_map="auto", load_in_8bit=True)
         elif configs.llm_model == 'mistral':
             model_id = "mistralai/Mistral-7B-v0.1"
             self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
@@ -331,7 +301,24 @@ class RespLLM(nn.Module):
             # model_id = "google/gemma-2-2b-it"
             model_id = "google/gemma-2-2b"
             self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
-            self.llm_model = AutoModel.from_pretrained(model_id, token = token)
+            
+            # Sử dụng 8-bit quantization nếu được kích hoạt
+            if hasattr(configs, 'use_8bit_quantization') and configs.use_8bit_quantization:
+                quantization_config = BitsAndBytesConfig(
+                    load_in_8bit=True,
+                    bnb_8bit_compute_dtype=torch.float16,
+                    bnb_8bit_use_double_quant=True,
+                    bnb_8bit_quant_type="nf8"
+                )
+                self.llm_model = AutoModel.from_pretrained(
+                    model_id, 
+                    token=token, 
+                    quantization_config=quantization_config,
+                    device_map="auto"
+                )
+                print("Loading Gemma-2B with 8-bit quantization")
+            else:
+                self.llm_model = AutoModel.from_pretrained(model_id, token = token)
         elif configs.llm_model == "gemma9B":
             # model_id = "google/gemma-2-9b-it"
             model_id = "google/gemma-2-9b"
@@ -446,21 +433,22 @@ class RespLLM(nn.Module):
         else:
             return NotImplementedError("aligner module undefined")
         
-        # modality_classes = ["exhalation", "cough", "breath", "lung", "cough-shallow", "cough-heavy", "breathing-shallow", "breathing-deep"]
-        modality_classes = ["school", "home", "dog", "outdoor", "transportation", "office", "gym", "cat"]
-        self.modality_encoder_type = configs.modality_encoder_type  # "onehot" | "bert"
-        self.modality_classes = modality_classes
-        self.num_modalities = len(modality_classes)         # 8
-        self.modality2idx = {m: i for i, m in enumerate(modality_classes)}
-        
         self.head_dropout = configs.head_dropout
+        self.modal_embs = configs.modal_embs 
+        # modality_classes = ["exhalation", "cough", "breath", "lung", "cough-shallow", "cough-heavy", "breathing-shallow", "breathing-deep"]
+        modality_classes = ["breath", "cough", "lung"] 
+        # modality_classes = ["school", "home", "dog", "outdoor", "transportation", "office", "gym", "cat"]
+        self.modality_encoder_type = configs.modality_encoder_type 
+        self.modality2idx = {m: i for i, m in enumerate(modality_classes)}
         self.out_modal_projector = configs.out_modal_projector
         self.out_feature_projector = configs.out_feature_projector
-        self.feature_head = FeatureHead(self.head_nf, self.out_feature_projector, head_dropout=self.head_dropout)
-        self.modality_projector = nn.Linear(self.llm_model.config.hidden_size, self.out_modal_projector)
-        self.classifier = ClassifierHead(self.out_feature_projector+self.out_modal_projector, self.n_cls)
+        self.feature_head = FlattenHead(self.head_nf, self.out_feature_projector, head_dropout=self.head_dropout)
+        self.classifier = nn.Linear(self.out_feature_projector+self.out_modal_projector, self.n_cls)
         if self.modality_encoder_type == "onehot":
-            modality_dim = self.num_modalities          # thường = 8
+            self.num_modalities = len(modality_classes)         # 8
+            modality_dim = self.num_modalities          
+        elif self.modality_encoder_type == "label":
+            modality_dim = 1
         elif self.modality_encoder_type == "bert":
             self.bert_tokenizer = BertTokenizer.from_pretrained("bert-base-uncased")
             self.bert_model = BertModel.from_pretrained("bert-base-uncased")
@@ -469,15 +457,22 @@ class RespLLM(nn.Module):
             modality_dim = 768                          # BERT hidden size
         elif self.modality_encoder_type == "llm_embeddings":
             modality_dim = self.llm_model.config.hidden_size
-        self.classifier_raw = ClassifierHead(modality_dim + self.llm_model.config.hidden_size, self.n_cls)
+        elif self.modality_encoder_type == "learnable":
+            # embed_dim = configs.modality_embed_dim  # hyperparameter, ví dụ 16, 32, 64
+            print(len(modality_classes))
+            embed_dim = 10
+            self.modality_embedding = nn.Embedding(len(modality_classes), embed_dim)
+            modality_dim = embed_dim
+        self.modality_projector = nn.Linear(modality_dim, self.d_llm)
+        self.classifier_raw = nn.Linear(modality_dim + self.llm_model.config.hidden_size, self.n_cls)
 
         self.output_projection = FlattenHead(self.head_nf, self.n_cls, head_dropout=self.head_dropout)
         self.print_trainable()
 
-    def reinitialize_clf(self, n_cls): # định nghĩa lại lớp đầu ra 
+    def reinitialize_clf(self, n_cls): 
         self.output_projection = FlattenHead(self.head_nf, n_cls, head_dropout=self.head_dropout)
 
-    def print_trainable(self): # in tổng số lượng tham số được train
+    def print_trainable(self): 
         trainable_params = sum(p.numel() for p in self.parameters() if p.requires_grad)
         print("total trainable parameters:", trainable_params)
 
@@ -506,56 +501,16 @@ class RespLLM(nn.Module):
             param.requires_grad = True # train tham số của lớp Linear
         self.print_trainable()
 
-    def forward1(self, x_spectrogram, x_prompt, x_context, no_fc=False):
-        target_device = self.llm_model.get_input_embeddings().weight.device 
-        target_dtype = self.llm_model.get_input_embeddings().weight.dtype
-        device = next(self.audio_encoder.parameters()).device
-        x_spectrogram = x_spectrogram.to(device)
-    
-        if self.patch_nums == 1:
-            x_enc = self.audio_encoder(x_spectrogram)
-            # print(x_enc.shape)
-            enc_out = self.aligner(x_enc)
-            enc_out = enc_out.unsqueeze(dim=1)
-        elif self.patch_nums == 64:
-            x_enc = self.audio_encoder.forward_window(x_spectrogram)
-            # print(x_enc.shape)
-            enc_out = self.aligner(x_enc.to(target_dtype))
-        else:
-            raise NotImplementedError
 
-        prompt = self.tokenizer(x_prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids.to(target_device)
-        prompt_embeddings = self.llm_model.get_input_embeddings()(prompt)  # (batch, prompt_token, dim)
-
-        context = self.tokenizer(x_context, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids.to(target_device)
-        context_embeddings = self.llm_model.get_input_embeddings()(context)  # (batch, prompt_token, dim)
-
-        enc_out = enc_out.to(device=target_device)  
-        
-        if self.use_audio:
-            llama_enc_out = torch.cat([prompt_embeddings, context_embeddings, enc_out], dim=1)
-        else:
-            llama_enc_out = torch.cat([prompt_embeddings, context_embeddings], dim=1)
-
-        dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
-        dec_out = dec_out[:, :, :self.d_ff]
-        # print(dec_out.shape)
-        dec_out = dec_out.permute(0, 2, 1).contiguous()
-        # print(dec_out.shape)
-        dec_out = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=no_fc)
-        return dec_out
-    
-
-    def _encode_modality(self, x_modality, device):
+    def encode_modality(self, x_modality, device):
         if self.modality_encoder_type == "onehot":
-            import torch.nn.functional as F
-
-            indices_tensor = torch.tensor(
-                [self.modality2idx.get(m, 0) for m in x_modality],
-                device=device
-            )
+            indices_tensor = torch.tensor([self.modality2idx.get(m, 0) for m in x_modality], device=device)
             modality_vec = F.one_hot(indices_tensor, num_classes=self.num_modalities).float() # (batch, 8)
             
+        elif self.modality_encoder_type == "label":
+            indices = torch.tensor([self.modality2idx.get(m, 0) for m in x_modality], device=device).float().unsqueeze(1)  # (batch, 1)
+            modality_vec = indices
+
         elif self.modality_encoder_type == "bert":
             # Encode từng modality string qua BERT, lấy [CLS] token
             tokens = self.bert_tokenizer(x_modality,return_tensors="pt",padding=True,truncation=True,max_length=16).to(device)
@@ -567,6 +522,9 @@ class RespLLM(nn.Module):
             modality = self.tokenizer(x_modality, return_tensors="pt", padding=True, truncation=True, max_length=16).input_ids.to(device)
             modality_embeddings = self.llm_model.get_input_embeddings()(modality)  # (batch, n_token, hidden_size)
             modality_vec = modality_embeddings.mean(dim=1)           # (batch, hidden_size)
+        elif self.modality_encoder_type == "learnable":
+            indices = torch.tensor([self.modality2idx.get(m, 0) for m in x_modality], device=device)
+            modality_vec = self.modality_embedding(indices)  # (batch, embed_dim)
 
         return modality_vec 
 
@@ -589,22 +547,30 @@ class RespLLM(nn.Module):
         context = self.tokenizer(x_context, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
         context_embeddings = self.llm_model.get_input_embeddings()(context.to(x_enc.device))  # (batch, prompt_token, dim)
 
-        llm_dtype = prompt_embeddings.dtype
-
-        if self.modal_embs is not None:
-            modality_vec = self._encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
+        # llm_dtype = prompt_embeddings.dtype
 
         # print("audio shape after aligner:", enc_out.shape)
         # print("prompt_embeddings shape:", prompt_embeddings.shape)
         # print("context_embeddings shape:", context_embeddings.shape)
         # print("modality_vector shape:", modality_vec.shape)
         
-        enc_out = enc_out.to(dtype=llm_dtype)
+        # enc_out = enc_out.to(dtype=llm_dtype)
 
-        if self.use_audio:
+        if self.use_audio and self.use_context_:
+            # print("Using audio embeddings!")
             llama_enc_out = torch.cat([prompt_embeddings, context_embeddings, enc_out], dim=1)
+        elif self.use_audio and not self.use_context_:
+            # print("Warning: not using context embeddings!")
+            llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
         else:
             llama_enc_out = torch.cat([prompt_embeddings, context_embeddings], dim=1)
+
+        if self.modal_embs is not None:
+            # print("Using modality embeddings!")
+            modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
+            modality_vec = modality_vec.to(self.modality_projector.weight.dtype)
+            modality_vec = self.modality_projector(modality_vec).unsqueeze(1)
+            llama_enc_out = torch.cat([llama_enc_out, modality_vec], dim=1)
 
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
         # print("dec_out shape:", dec_out.shape)
@@ -613,29 +579,32 @@ class RespLLM(nn.Module):
         dec_out = dec_out.permute(0, 2, 1).contiguous()
         # print("dec_out shape before flatten head:", dec_out.shape)
         
-        dec_out = dec_out.to(dtype=torch.float32)
+        # dec_out = dec_out.to(dtype=torch.float32)
+        # if self.modal_embs is not None:
+        #     # print("Using modality embeddings!")
+        #     modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
 
-        if self.modal_embs == "projected_concat":
-            # print("Using modality embeddings for classification")
-            dec_out = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=True)
-            # print("dec_out shape after flatten head:", dec_out.shape)
-            modality_vec = self.modality_projector(modality_vec)      # (batch, 10)
-            # print("modality_vec shape:", modality_vec.shape)
-            fused = torch.cat([dec_out, modality_vec], dim=1)      
-            # print("dec_out shape after adding modality vector:", dec_out.shape)
-            dec_out = self.classifier(fused)                          # (batch, 2)
-            # print("dec_out shape after final fc:", dec_out.shape)
-        elif self.modal_embs == "raw_concat":
-            dec_flat = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=True)
-            # print("dec_out shape after flatten head:", dec_flat.shape)
-            # print("modality_vec shape:", modality_vec.shape)
-            fused = torch.cat([dec_flat, modality_vec], dim=1)
-            # print("dec_out shape after adding modality vector:", fused.shape)
-            dec_out = self.classifier_raw(fused)
-            # print("dec_out shape after final fc:", dec_out.shape)
-        elif self.modal_embs == None:
-            # print("Not using modality embeddings for classification")
-            dec_out = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=no_fc)
+        #     if self.modal_embs == "projected_concat":
+        #         dec_out = self.feature_head(dec_out[:, :, -self.patch_nums:])
+        #         # print("dec_out shape after flatten head:", dec_out.shape)
+        #         modality_vec = self.modality_projector(modality_vec)      # (batch, 10)
+        #         # print("modality_vec shape:", modality_vec.shape)
+        #         fused = torch.cat([dec_out, modality_vec], dim=1)      
+        #         # print("dec_out shape after adding modality vector:", dec_out.shape)
+        #         dec_out = self.classifier(fused)                          # (batch, 2)
+        #         # print("dec_out shape after final fc:", dec_out.shape)
+        #     elif self.modal_embs == "raw_concat":
+        #         dec_flat = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=True)
+        #         # print("dec_out shape after flatten head:", dec_flat.shape)
+        #         # print("modality_vec shape:", modality_vec.shape)
+        #         fused = torch.cat([dec_flat, modality_vec], dim=1)
+        #         # print("dec_out shape after adding modality vector:", fused.shape)
+        #         dec_out = self.classifier_raw(fused)
+        #         # print("dec_out shape after final fc:", dec_out.shape)
+        # else:
+        #     # print("Not using modality embeddings!")
+        #     dec_out = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=no_fc)
+        dec_out = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=no_fc)
 
         return dec_out
     

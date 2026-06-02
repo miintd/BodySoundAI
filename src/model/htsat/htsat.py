@@ -752,3 +752,52 @@ class HTSATWrapper(nn.Module):
     def forward(self, x):
         out_dict = self.htsat(x)
         return  out_dict['latent_output']
+    
+    def forward_window(self, x):
+        """
+        Extract 2D patch feature map before pooling for windowed patch processing
+        Returns feature map with shape (B, C, F, T) containing 64 patches
+        
+        Args:
+            x: Input spectrogram with shape (B, 1, T, F)
+        Returns:
+            Feature map with shape (B, C, F, T) where F*T represents patches
+        """
+        frames_num = x.shape[2]  # Extract T dimension
+        
+        # Pre-process: batch normalization
+        x = x.transpose(1, 3)
+        x = self.htsat.bn0(x)
+        x = x.transpose(1, 3)
+
+        x = self.htsat.reshape_wav2img(x)  # Reshape to (B, 1, F, T) suitable for patch embedding
+        
+        # Patch embedding
+        x = self.htsat.patch_embed(x)  # (B, num_patches, embed_dim)
+        
+        # Add absolute position embedding if enabled
+        if self.htsat.ape:
+            x = x + self.htsat.absolute_pos_embed
+        x = self.htsat.pos_drop(x)
+        
+        # Pass through all transformer layers
+        for layer in self.htsat.layers:
+            x, _ = layer(x)
+        
+        # Layer normalization
+        x = self.htsat.norm(x)  # (B, N, C) where N = num_patches
+        
+        # Reshape from (B, N, C) to (B, C, F, T) 
+        # The downsampling factor depends on the number of transformer layers
+        B, N, C = x.shape
+        
+        # Calculate spatial dimensions based on downsampling
+        # HTSAT uses 2^(len(depths)+1) downsampling factor
+        downsampling_factor = 2 ** (len(self.htsat.depths) + 1)
+        F = T = frames_num // downsampling_factor
+        
+        # Reshape to 2D feature map
+        x = x.permute(0, 2, 1).contiguous().reshape(B, C, F, T)
+        # print(f"Extracted window feature map shape: {x.shape}")  # Debug print
+        
+        return x

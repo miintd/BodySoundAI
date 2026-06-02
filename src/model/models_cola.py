@@ -38,6 +38,21 @@ class EncoderHTSAT(torch.nn.Module):
         y = self.encoder(x)
 
         return y
+    
+    def forward_window(self, x):
+        """
+        Extract 2D patch features for windowed processing (64 patches)
+        Args:
+            x: Input spectrogram with shape (B, 1, T, F) or (B, T, F)
+        Returns:
+            Feature map with shape (B, C, F, T) containing 64 patches
+        """
+        # Ensure channel dimension exists
+        if x.dim() == 3:
+            x = x.unsqueeze(1)  # (B, T, F) -> (B, 1, T, F)
+        
+        # Get 2D feature map from HTSAT encoder
+        return self.encoder.forward_window(x)
  
 
 class Cola(pl.LightningModule):

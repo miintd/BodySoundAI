@@ -3,6 +3,7 @@ import pandas as pd
 import torch
 from torch import nn
 from torch.nn import functional as F
+from sklearn.metrics import confusion_matrix
 from torchmetrics import AUROC
 from tqdm import tqdm
 import os
@@ -108,6 +109,11 @@ def itr_merge(*itrs):
  
 def merge_dataloader(dataloaders):
     return ConcatDataset(dataloaders)
+
+def worker_init_fn(worker_id, seed=42):
+    np.random.seed(seed + worker_id)
+    random.seed(seed + worker_id)
+    torch.manual_seed(seed + worker_id)
  
 def get_dataloader(configs, task, sample=False, deft_seed=None):
     # nhận diện task -> chọn dataset/label/modality
@@ -130,26 +136,26 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
     n_cls = collections.defaultdict(lambda:2, {"11": 5, "12": 5})
 
     dataset, label, modality = tasks_config[task]
-    # modality_map = {
-    #     "cough": "cough",
-    #     "cough-heavy": "cough",
-    #     "cough-shallow": "cough",
-    #     "breath": "breath",
-    #     "breathing-deep": "breath",
-    #     "breathing-shallow": "breath",
-    #     "exhalation": "breath",
-    #     "lung": "lung"
-    # }
     modality_map = {
-        "cough": "school",
-        "cough-heavy": "dog",
-        "cough-shallow": "outdoor",
-        "breath": "office",
-        "breathing-deep": "transportation",
-        "breathing-shallow": "home",
-        "exhalation": "gym",
-        "lung": "cat"
+        "cough": "cough",
+        "cough-heavy": "cough",
+        "cough-shallow": "cough",
+        "breath": "breath",
+        "breathing-deep": "breath",
+        "breathing-shallow": "breath",
+        "exhalation": "breath",
+        "lung": "lung"
     }
+    # modality_map = {
+    #     "cough": "school",
+    #     "cough-heavy": "dog",
+    #     "cough-shallow": "outdoor",
+    #     "breath": "office",
+    #     "breathing-deep": "transportation",
+    #     "breathing-shallow": "home",
+    #     "exhalation": "gym",
+    #     "lung": "cat"
+    # }
 
     normalized_modality = modality_map[modality]
     # print(normalized_modality)
@@ -437,6 +443,9 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
             np.save(spec_file_name, x_data)
 
     seed = 42
+    generator = torch.Generator()
+    generator.manual_seed(seed)
+
 # chia train/val/test cho từng dataset
     if dataset == "icbhidisease":
         x_data = np.load(feature_dir + f"segmented_spectrogram_pad{str(int(pad_len_htsat[dataset]))}" + suffix_dataset)
@@ -453,17 +462,40 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
         y_set = np.load(feature_dir + "data_split.npy")
         
         if task in ["S3", "S4"]:
-            x_data_train = x_data[y_set == "train"]
-            x_metadata_train = x_metadata[y_set == "train"]
-            y_label_train = y_label[y_set == "train"]
-            
-            x_data_vad = x_data[y_set == "validation"]
-            x_metadata_vad = x_metadata[y_set == "validation"]
-            y_label_vad = y_label[y_set == "validation"]
+            if configs.val_S3_S4:
+                print("Using original S3/S4 validation set")
+                x_data_train = x_data[y_set == "train"]
+                x_metadata_train = x_metadata[y_set == "train"]
+                y_label_train = y_label[y_set == "train"]
+                
+                x_data_vad = x_data[y_set == "validation"]
+                x_metadata_vad = x_metadata[y_set == "validation"]
+                y_label_vad = y_label[y_set == "validation"]
 
-            x_data_test = x_data[y_set == "test"]
-            x_metadata_test = x_metadata[y_set == "test"]
-            y_label_test = y_label[y_set == "test"]
+                x_data_test = x_data[y_set == "test"]
+                x_metadata_test = x_metadata[y_set == "test"]
+                y_label_test = y_label[y_set == "test"]
+
+            else:
+                print("Using S3/S4 validation set as extra training data")
+                x_data_train_raw = x_data[y_set == "train"]
+                x_metadata_train_raw = x_metadata[y_set == "train"]
+                y_label_train_raw = y_label[y_set == "train"]
+
+                (x_data_train, x_data_val_extra, x_metadata_train, x_metadata_val_extra, y_label_train, y_label_val_extra) = train_test_split(
+                x_data_train_raw, x_metadata_train_raw, y_label_train_raw, test_size=0.2, random_state=42, stratify=y_label_train_raw)
+                
+                x_data_vad_orig = x_data[y_set == "validation"]
+                x_metadata_vad_orig = x_metadata[y_set == "validation"]
+                y_label_vad_orig = y_label[y_set == "validation"]
+
+                x_data_test = x_data[y_set == "test"]
+                x_metadata_test = x_metadata[y_set == "test"]
+                y_label_test = y_label[y_set == "test"]
+
+                x_data_vad = np.concatenate([x_data_vad_orig, x_data_val_extra], axis=0)
+                x_metadata_vad = np.concatenate([x_metadata_vad_orig, x_metadata_val_extra], axis=0)
+                y_label_vad = np.concatenate([y_label_vad_orig, y_label_val_extra], axis=0)
         else:
             x_data_train = x_data[y_set == 0]
             x_metadata_train = x_metadata[y_set == 0]
@@ -478,7 +510,7 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
             y_label_test = y_label[y_set == 2]
         
     elif dataset == "coswara":
-        if True: #label == "covid":
+        if configs.full_dataset == False: #label == "covid":
             set_all_seed(seed)
             symptoms = np.array([1 if 'following respiratory symptoms' in m else 0 for m in x_metadata])
             np.save(feature_dir + f"symptom" + suffix_dataset, symptoms)
@@ -507,7 +539,10 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
             # Combine test and training indices
             indices_test = np.concatenate([group1_indices_test, group2_indices_test, group3_indices_test, group4_indices_test])
             indices_train = np.concatenate([group1_indices_train, group2_indices_train, group3_indices_train, group4_indices_train])
-
+            
+            # indices_test = np.concatenate([group2_indices, group4_indices])
+            # indices_train = np.concatenate([group1_indices, group3_indices])
+            
             print("train")
             for indices_array in [group1_indices_train, group2_indices_train, group3_indices_train, group4_indices_train]:
                 print(len(indices_array), end=";")
@@ -541,6 +576,19 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
                 group_idxs.append(group)
         
             group_idxs = np.array(group_idxs)
+        else:
+            x_data_test = x_data
+            x_metadata_test = x_metadata
+            y_label_test = y_label
+
+            x_data_train = x_data[:0]
+            x_metadata_train = x_metadata[:0]
+            y_label_train = y_label[:0]
+
+            x_data_vad = x_data[:0]
+            x_metadata_vad = x_metadata[:0]
+            y_label_vad = y_label[:0]
+
 
     elif dataset == "kauh":
         y_set = np.load(feature_dir + "train_test_split.npy")
@@ -602,9 +650,9 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
 
         x_data_train, x_metadata_train, y_label_train, x_data_test, x_metadata_test, y_label_test = x_data_test, x_metadata_test, y_label_test, x_data_train, x_metadata_train, y_label_train
 
-    x_modality_train = np.array([modality] * len(x_data_train))
-    x_modality_vad   = np.array([modality] * len(x_data_vad))
-    x_modality_test  = np.array([modality] * len(x_data_test))
+    x_modality_train = np.array([normalized_modality] * len(x_data_train))
+    x_modality_vad   = np.array([normalized_modality] * len(x_data_vad))
+    x_modality_test  = np.array([normalized_modality] * len(x_data_test))
 
 # giới hạn tỉ lệ train theo configs.train_pct
     # !! didn't split the metadata as needed, all results were wrong
@@ -613,10 +661,26 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
         x_data_train, _, y_label_train, _, x_metadata_train, _ = train_test_split(
             x_data_train, y_label_train, x_metadata_train, test_size=1 - train_data_percentage, random_state=seed, stratify=y_label_train
         )
-        x_modality_train = np.array([modality] * len(x_data_train))
+        x_modality_train = np.array([normalized_modality] * len(x_data_train))
+
+#     x_modality_train = np.array([modality] * len(x_data_train))
+#     x_modality_vad   = np.array([modality] * len(x_data_vad))
+#     x_modality_test  = np.array([modality] * len(x_data_test))
+
+# # giới hạn tỉ lệ train theo configs.train_pct
+#     # !! didn't split the metadata as needed, all results were wrong
+#     train_data_percentage = configs.train_pct
+#     if not sample and train_data_percentage < 1:
+#         x_data_train, _, y_label_train, _, x_metadata_train, _ = train_test_split(
+#             x_data_train, y_label_train, x_metadata_train, test_size=1 - train_data_percentage, random_state=seed, stratify=y_label_train
+#         )
+#         x_modality_train = np.array([modality] * len(x_data_train))
 
     print(collections.Counter(y_label_train))
-    min_train_cls = min(collections.Counter(y_label_train).values())
+    if len(y_label_train) > 0:
+        min_train_cls = min(collections.Counter(y_label_train).values())
+    else:
+        min_train_cls = 0
     print(collections.Counter(y_label_vad))
     print(collections.Counter(y_label_test))
     min_test_cls = min(collections.Counter(y_label_test).values())
@@ -643,12 +707,15 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
         
         train_loader = DataLoader(
             train_data, num_workers=2,  batch_sampler=sampler,
+            worker_init_fn=lambda worker_id: worker_init_fn(worker_id, seed)
         )
         val_loader = DataLoader(
             val_data, num_workers=2, # batch_sampler=sampler,
+            worker_init_fn=lambda worker_id: worker_init_fn(worker_id, seed)
         )
         test_loader = DataLoader(
-            test_data, batch_size=configs.batch_size, shuffle=False, num_workers=2
+            test_data, batch_size=configs.batch_size, shuffle=False, num_workers=2,
+            worker_init_fn=lambda worker_id: worker_init_fn(worker_id, seed)
         )
         return train_loader, val_loader, test_loader
 
@@ -656,14 +723,20 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
         train_data = AudioDataset((x_data_train, x_metadata_train, y_label_train, x_modality_train),  from_audio=from_audio, prompt=prompt)
         test_data = AudioDataset((x_data_test, x_metadata_test, y_label_test, x_modality_test),  from_audio=from_audio, prompt=prompt)
         val_data = AudioDataset((x_data_vad, x_metadata_vad, y_label_vad, x_modality_vad),  from_audio=from_audio, prompt=prompt)
-        train_loader = DataLoader(
-            train_data, batch_size=configs.batch_size, num_workers=2, shuffle=True
-        )
-        val_loader = DataLoader(
-            val_data, batch_size=configs.batch_size, num_workers=2, shuffle=True
-        )
+        train_loader, val_loader = None, None
+        if len(x_data_train) > 0:
+            train_loader = DataLoader(
+                train_data, batch_size=configs.batch_size, num_workers=2, shuffle=True,
+                generator=generator, worker_init_fn=lambda worker_id: worker_init_fn(worker_id, seed)
+            )
+        if len(x_data_vad) > 0:
+            val_loader = DataLoader(
+                val_data, batch_size=configs.batch_size, num_workers=2, shuffle=True,
+                generator=generator, worker_init_fn=lambda worker_id: worker_init_fn(worker_id, seed)
+            )
         test_loader = DataLoader(
-            test_data, batch_size=configs.batch_size, shuffle=False, num_workers=2
+            test_data, batch_size=configs.batch_size, shuffle=False, num_workers=2,
+            worker_init_fn=lambda worker_id: worker_init_fn(worker_id, seed)
         )
         return train_loader, val_loader, test_loader
 
@@ -958,7 +1031,7 @@ def upsample_balanced_dataset(x_train, metadata_train, y_train):
 
 
 
-def test(model, test_loader, loss_func, n_cls, plot_feature="", plot_only=False, return_auc=False, verbose=True):
+def test(model, test_loader, loss_func, n_cls, plot_feature="", plot_only=False, return_auc=False, verbose=True, print_cm=True):
     total_loss = [] #lưu loss từng batch
     test_step_outputs = []
     features = []
@@ -1003,6 +1076,10 @@ def test(model, test_loader, loss_func, n_cls, plot_feature="", plot_only=False,
     # print(y)
     # print(probs[11])
 
+    # confusion matrix
+    cm = confusion_matrix(y, predicted)
+    TN, FP, FN, TP = cm.ravel()
+
     # tính accuracy 
     acc = np.mean(predicted == y)
     # tính auc
@@ -1013,11 +1090,171 @@ def test(model, test_loader, loss_func, n_cls, plot_feature="", plot_only=False,
         print("loss", total_loss)
         print("acc", acc)
         print("auc", auc)
+        if print_cm:
+            print(f"TP: {TP}")
+            print(f"TN: {TN}")
+            print(f"FP: {FP}")
+            print(f"FN: {FN}")
+
 
     if return_auc:
-        return acc, auc
+        return acc, auc, total_loss
 
-    return total_loss / (i+1)
+    return total_loss
+
+
+def log_confusion_matrix_and_errors(y_true, y_pred, probs, task_name="task", 
+                                    class_names=None, output_dir="eval_logs", verbose=True):
+
+    import numpy as np
+    from sklearn.metrics import confusion_matrix
+    
+    os.makedirs(output_dir, exist_ok=True)
+    n_cls = len(np.unique(y_true))
+    
+    if class_names is None:
+        class_names = {i: f"class_{i}" for i in range(n_cls)}
+    
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true, y_pred, labels=list(range(n_cls)))
+    
+    # Find misclassified
+    misclassified_mask = y_pred != y_true
+    misclassified_indices = np.where(misclassified_mask)[0]
+    
+    # Compute metrics
+    accuracy = np.mean(y_pred == y_true)
+    
+    # Print results
+    if verbose:
+        print("\n" + "="*80)
+        print(f"CONFUSION MATRIX AND MISCLASSIFIED SAMPLES - {task_name}")
+        print("="*80)
+        print(f"\nAccuracy: {accuracy:.4f} ({accuracy*100:.2f}%)")
+        print(f"Total samples: {len(y_true)}")
+        print(f"Correct predictions: {len(y_true) - len(misclassified_indices)}")
+        print(f"Misclassified: {len(misclassified_indices)}\n")
+        
+        # Print confusion matrix
+        print("Confusion Matrix:")
+        print(cm)
+        print()
+        
+        # Print per-class breakdown
+        print("Per-class accuracy:")
+        for i in range(n_cls):
+            class_total = cm[i].sum()
+            class_correct = cm[i, i]
+            class_acc = class_correct / class_total if class_total > 0 else 0
+            class_name = class_names.get(i, f"class_{i}")
+            print(f"  {class_name}: {class_correct}/{class_total} ({class_acc*100:.1f}%)")
+        
+        print("\nDetailed mismatch analysis:")
+        for i in range(n_cls):
+            for j in range(n_cls):
+                if i != j:
+                    count = cm[i, j]
+                    if count > 0:
+                        true_name = class_names.get(i, f"class_{i}")
+                        pred_name = class_names.get(j, f"class_{j}")
+                        error_mask = (y_true == i) & (y_pred == j)
+                        error_idx = np.where(error_mask)[0]
+                        print(f"\n  True={true_name:15s} → Pred={pred_name:15s}: {count} errors")
+                        print(f"    Sample indices (first 20): {error_idx[:20].tolist()}")
+    
+    # Prepare misclassified data
+    misclassified_data = []
+    for idx in misclassified_indices:
+        pred_prob = probs[idx, y_pred[idx]]
+        true_prob = probs[idx, int(y_true[idx])]
+        misclassified_data.append({
+            'sample_index': int(idx),
+            'true_label': int(y_true[idx]),
+            'true_label_name': class_names.get(int(y_true[idx]), f"class_{int(y_true[idx])}"),
+            'predicted_label': int(y_pred[idx]),
+            'predicted_label_name': class_names.get(int(y_pred[idx]), f"class_{int(y_pred[idx])}"),
+            'confidence': float(pred_prob),
+            'true_prob': float(true_prob),
+        })
+    
+    # Save to CSV
+    try:
+        import pandas as pd
+        df = pd.DataFrame(misclassified_data)
+        csv_file = os.path.join(output_dir, f"misclassified_{task_name}.csv")
+        df.to_csv(csv_file, index=False)
+        print(f"\n✓ Misclassified samples saved: {csv_file}")
+    except Exception as e:
+        print(f"Warning: Could not save CSV: {e}")
+    
+    # Save text report
+    txt_file = os.path.join(output_dir, f"report_{task_name}.txt")
+    with open(txt_file, 'w') as f:
+        f.write("="*80 + "\n")
+        f.write(f"EVALUATION REPORT - {task_name}\n")
+        f.write("="*80 + "\n\n")
+        f.write(f"Accuracy: {accuracy:.4f} ({accuracy*100:.2f}%)\n")
+        f.write(f"Total samples: {len(y_true)}\n")
+        f.write(f"Misclassified: {len(misclassified_indices)}\n\n")
+        f.write("Confusion Matrix:\n")
+        f.write(str(cm) + "\n\n")
+        f.write("Misclassified samples (sorted by confidence):\n")
+        f.write("-"*80 + "\n")
+        sorted_data = sorted(misclassified_data, key=lambda x: x['confidence'], reverse=True)
+        for sample in sorted_data:
+            f.write(f"Sample #{sample['sample_index']}: {sample['true_label_name']} → {sample['predicted_label_name']} (confidence: {sample['confidence']:.4f})\n")
+    
+    print(f"✓ Report saved: {txt_file}")
+    
+    return cm, misclassified_data, accuracy
+
+
+def test_and_collect_predictions(model, test_loader, loss_func, n_cls, task_name="task", 
+                                 class_names=None, output_dir="eval_logs", verbose=True):
+    test_step_outputs = []
+    model.eval()
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    
+    with torch.no_grad():
+        for x1, x2, x3, y, m in test_loader:
+            x1 = x1.to(device)
+            y = y.to(device)
+            
+            y_hat = model(x1, x2, x3, m)
+            loss = loss_func(y_hat, y)
+            
+            _, predicted = torch.max(y_hat, 1)
+            probabilities = F.softmax(y_hat, dim=1)
+            
+            test_step_outputs.append((
+                y.detach().cpu().numpy(),
+                predicted.detach().cpu().numpy(),
+                probabilities.detach().cpu().numpy()
+            ))
+    
+    # Aggregate all outputs
+    y_true = np.concatenate([output[0] for output in test_step_outputs])
+    y_pred = np.concatenate([output[1] for output in test_step_outputs])
+    probs = np.concatenate([output[2] for output in test_step_outputs])
+    
+    # Compute basic metrics
+    accuracy = np.mean(y_pred == y_true)
+    auroc = AUROC(task="multiclass", num_classes=n_cls)
+    auc = auroc(torch.from_numpy(probs), torch.from_numpy(y_true))
+    
+    # Log confusion matrix and errors
+    cm, misclassified_data, _ = log_confusion_matrix_and_errors(
+        y_true, y_pred, probs,
+        task_name=task_name,
+        class_names=class_names,
+        output_dir=output_dir,
+        verbose=verbose
+    )
+    
+    if verbose:
+        print(f"AUC: {auc:.4f}")
+    
+    return accuracy, auc.item(), cm, y_true, y_pred, probs
 
 
 def set_all_seed(seed):
@@ -1043,6 +1280,128 @@ def save_pickle(file, data):
 def load_pickle(file):
     with open(file, 'rb') as f:
         return pickle.load(f)
+
+
+def check_metadata_quality(metadata, task_name="task", verbose=True):
+    """
+    Kiểm tra chất lượng metadata - tính toán tỷ lệ dữ liệu bị thiếu cho mỗi cột.
+    
+    Args:
+        metadata: list of dictionaries chứa metadata
+        task_name: tên task/dataset (dùng để in ra)
+        verbose: có in ra kết quả không
+    
+    Returns:
+        dict chứa thông tin chi tiết về missing values
+    """
+    if len(metadata) == 0:
+        print(f"⚠️  Metadata trống cho {task_name}")
+        return {}
+    
+    # Chuyển list của dict thành DataFrame
+    df_metadata = pd.DataFrame(metadata)
+    
+    # Tính toán missing values
+    missing_info = {}
+    total_samples = len(df_metadata)
+    
+    if verbose:
+        print("\n" + "="*80)
+        print(f"METADATA QUALITY REPORT - {task_name}")
+        print("="*80)
+        print(f"Total samples: {total_samples}\n")
+        print(f"{'Column':<20} {'Missing':<15} {'Percentage':<15} {'Available':<15}")
+        print("-"*65)
+    
+    for col in df_metadata.columns:
+        # Đếm missing values (empty dict, None, NaN, empty string)
+        missing_count = 0
+        for val in df_metadata[col]:
+            if pd.isna(val) or val is None or val == "" or val == 0:
+                missing_count += 1
+        
+        missing_pct = (missing_count / total_samples) * 100
+        available = total_samples - missing_count
+        
+        missing_info[col] = {
+            'missing_count': missing_count,
+            'missing_percentage': missing_pct,
+            'available': available,
+            'available_percentage': 100 - missing_pct
+        }
+        
+        if verbose:
+            print(f"{col:<20} {missing_count:<15} {missing_pct:>6.2f}%{'':<8} {available:<15}")
+    
+    # Tính toán số dòng hoàn toàn trống
+    empty_rows = 0
+    for idx, row in df_metadata.iterrows():
+        if all(pd.isna(v) or v is None or v == "" or v == 0 for v in row.values):
+            empty_rows += 1
+    
+    if verbose:
+        print("-"*65)
+        print(f"Completely empty rows: {empty_rows} ({(empty_rows/total_samples)*100:.2f}%)")
+        print(f"Complete rows: {total_samples - empty_rows} ({((total_samples-empty_rows)/total_samples)*100:.2f}%)")
+        print("="*80 + "\n")
+    
+    missing_info['empty_rows'] = empty_rows
+    missing_info['complete_rows'] = total_samples - empty_rows
+    missing_info['total_samples'] = total_samples
+    
+    return missing_info
+
+
+def check_metadata_detailed(metadata, task_name="task", max_samples=10):
+    """
+    Kiểm tra metadata chi tiết - hiển thị một vài samples.
+    
+    Args:
+        metadata: list of dictionaries chứa metadata
+        task_name: tên task/dataset
+        max_samples: số lượng samples để hiển thị
+    """
+    print("\n" + "="*80)
+    print(f"METADATA SAMPLES - {task_name}")
+    print("="*80)
+    
+    df_metadata = pd.DataFrame(metadata)
+    
+    print(f"\nShape: {df_metadata.shape}")
+    print(f"Columns: {list(df_metadata.columns)}\n")
+    
+    print("Sample rows:")
+    print(df_metadata.head(min(max_samples, len(df_metadata))).to_string())
+    
+    print("\n" + "="*80 + "\n")
+
+
+def get_metadata_summary(metadata):
+    """
+    Trả về summary của metadata dưới dạng dict.
+    
+    Args:
+        metadata: list of dictionaries
+    
+    Returns:
+        dict với thông tin summary
+    """
+    if len(metadata) == 0:
+        return {'total': 0}
+    
+    df_metadata = pd.DataFrame(metadata)
+    summary = {'total': len(df_metadata)}
+    
+    for col in df_metadata.columns:
+        missing_count = sum(1 for val in df_metadata[col] 
+                          if pd.isna(val) or val is None or val == "" or val == 0)
+        summary[col] = {
+            'available': len(df_metadata) - missing_count,
+            'missing': missing_count,
+            'missing_pct': (missing_count / len(df_metadata)) * 100 if len(df_metadata) > 0 else 0
+        }
+    
+    return summary
 
 
 def load_checkpoint(model, configs, type='best'):

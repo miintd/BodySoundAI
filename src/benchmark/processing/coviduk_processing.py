@@ -9,8 +9,8 @@ from tqdm import tqdm
 
 data_dir = "datasets/covidUK/"
 feature_dir = "feature/coviduk_eval/"
-audio_dir = data_dir + "audio_selected/"
-# audio_dir = "/media/tran-dam-quoc-khanh/76e48e08-7447-4a59-9252-9576a8b4097f/home/businessailab5/Downloads/backup/OPERA_data/covidUK/audio_selected/"
+# audio_dir = data_dir + "audio_selected/"
+audio_dir = "/media/tran-dam-quoc-khanh/76e48e08-7447-4a59-9252-9576a8b4097f/home/businessailab5/Downloads/backup/OPERA_data/covidUK/audio_selected/"
 
 if not os.path.exists(audio_dir):
     raise FileNotFoundError(f"Folder not found: {audio_dir}, please download the dataset.")
@@ -29,10 +29,10 @@ def get_user_id_from_file(modality):
 
 
 def process_label(modality="exhalation"):
-    train_files = np.load(data_dir + "{}_training_files_downsample.npy".format(modality), allow_pickle = True)
-    val_files = np.load(data_dir + "{}_val_files_downsample.npy".format(modality), allow_pickle = True)
-    test_files = np.load(data_dir + "{}_testing_files_downsample.npy".format(modality), allow_pickle = True)
-    
+    train_files = np.load("/media/tran-dam-quoc-khanh/76e48e08-7447-4a59-9252-9576a8b4097f/home/businessailab5/Downloads/backup/OPERA_data/covidUK/" + "{}_training_files_downsample.npy".format(modality), allow_pickle = True)
+    val_files = np.load("/media/tran-dam-quoc-khanh/76e48e08-7447-4a59-9252-9576a8b4097f/home/businessailab5/Downloads/backup/OPERA_data/covidUK/" + "{}_val_files_downsample.npy".format(modality), allow_pickle = True)
+    test_files = np.load("/media/tran-dam-quoc-khanh/76e48e08-7447-4a59-9252-9576a8b4097f/home/businessailab5/Downloads/backup/OPERA_data/covidUK/" + "{}_testing_files_downsample.npy".format(modality), allow_pickle = True)
+
     all_files = list(train_files) + list(val_files) + list(test_files)
 
     df_user = pd.read_csv(data_dir + 'participant_metadata.csv', index_col="participant_identifier")
@@ -110,9 +110,14 @@ if __name__ == '__main__':
 
     if not os.path.exists(feature_dir):
         os.makedirs(feature_dir)        
+        print("Processing labels for both modalities")
         for modality in ["exhalation", "cough"]:
             process_label(modality)
+        print("Finish processing labels for both modalities")
     
+    print("Processing labels for both modalities")
+    for modality in ["exhalation", "cough"]:
+        process_label(modality)
     # if args.pretrain in ["vggish", "opensmile", "clap", "audiomae"]: 
     #     extract_and_save_embeddings_baselines(args.modality, args.pretrain)
     # else:

@@ -28,9 +28,20 @@ done
 echo "Token valid. Continue."
 
 # bash scripts/clone_data.sh
-source scripts/setup_env.sh
+# source scripts/setup_env.sh
 # Kích hoạt môi trường conda
 # eval "$(conda shell.bash hook)"
 # conda activate audio
-bash scripts/run_audio_label.sh "$1" 
+# bash scripts/run_audio_label.sh "$1" 
 # bash scripts/run_wavelet.sh 
+# python src/benchmark/processing/coviduk_processing.py
+# python src/benchmark/processing/covid19sounds_processing.py
+# python src/benchmark/processing/icbhi_processing.py
+# python src/benchmark/processing/coswara_processing.py
+# python src/benchmark/processing/kauh_processing.py
+# python src/benchmark/RespLLM/cnn_preprocess.py
+# bash scripts/run_cnn_baseline.sh "$1"
+# bash scripts/run_specific_modal_task.sh "$1"
+# bash scripts/run_audio_label.sh "$1"
+bash scripts/run_llm_baseline.sh "$1"
+bash scripts/add_modal_embs.sh "$1"

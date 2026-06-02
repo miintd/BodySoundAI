@@ -8,7 +8,8 @@ from tqdm import tqdm
 
 feature_dir = "feature/kauh_eval/"
 
-audio_dir = "datasets/KAUH/AudioFiles/"
+# audio_dir = "datasets/KAUH/AudioFiles/"
+audio_dir = "/media/tran-dam-quoc-khanh/76e48e08-7447-4a59-9252-9576a8b4097f/home/businessailab5/Downloads/backup/OPERA_data/KAUH/AudioFiles/"
 
 if not os.path.exists(audio_dir):
     print(f"Folder not found: {audio_dir}, downloading the dataset")
@@ -152,10 +153,10 @@ if __name__ == '__main__':
 
     if not os.path.exists(feature_dir):
         os.makedirs(feature_dir)
-        preprocess_subset()
-        split_set()
-        for trait in ["label", "sex", "age"]:
-            check_demographic(trait)
+    preprocess_subset()
+        # split_set()
+        # for trait in ["label", "sex", "age"]:
+        #     check_demographic(trait)
 
     # if args.pretrain in ["vggish", "opensmile", "clap", "audiomae"]:
     #     extract_and_save_embeddings_baselines(args.pretrain)

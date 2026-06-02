@@ -41,8 +41,8 @@ def preprocess_task2(modality="cough"):
         data_split.append(split)
         sound_dir_loc.append(file)
 
-    np.save(task2_dir + "labels.npy", np.array(labels))
-    np.save(task2_dir + "data_split.npy", np.array(data_split))
+    # np.save(task2_dir + "labels.npy", np.array(labels))
+    # np.save(task2_dir + "data_split.npy", np.array(data_split))
     np.save(task2_dir + "sound_dir_loc_{}.npy".format(modality),
             np.array(sound_dir_loc))
 
@@ -167,12 +167,12 @@ if __name__ == '__main__':
         # os.makedirs(task1_downsampled_smoker_dir)
         os.makedirs(task1_downsampled_dir)
 
-        for modality in ["breath", "cough"]:
-            preprocess_task1(modality)
-            preprocess_task2(modality)
-            print("Preprocessing done for modality:", modality)
-        print("Starting downsampling smoker task...")
-        task1_downsample()
+    for modality in ["breath", "cough"]:
+        # preprocess_task1(modality)
+        preprocess_task2(modality)
+        print("Preprocessing done for modality:", modality)
+        # print("Starting downsampling smoker task...")
+        # task1_downsample()
         # task1_smoker_downsample()k1(modality)
         # task1_downsample()
 

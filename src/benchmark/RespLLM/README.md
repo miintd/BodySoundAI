@@ -7,7 +7,7 @@ This code utilize the [OPERA framework](https://github.com/evelyn0414/OPERA)[1] 
 
 example for training RespLLM:
 ```
-python src/benchmark/RespLLM/RespLLM.py --llm_model GPT2 --train_tasks S1,S2 --test_tasks S5,S6 --train_epochs 10 --meta_val_interval 3  --train_pct 1 --batch_size 16 --llm_dim 768 --d_ff 768 >> out_RespLLM_GPT2.txt
+python src/benchmark/RespLLM/RespLLM_ori.py --llm_model GPT2 --train_tasks T3,T4 --test_tasks T3,T4 --train_epochs 40 --meta_val_interval 3  --train_pct 1 --batch_size 16 --llm_dim 768 --d_ff 768 >> logs_llm_baseline/out_GPT2_T34.txt
 ```
 
 
