@@ -8,6 +8,7 @@ MODE=${1:-full}
 BATCH_SIZE=${2:-16}
 HF_TOKEN=${3:-""}
 WANDB_KEY=${4:-""}
+LLM_MODEL=${5:-""}
 
 # Set tasks and log directory based on mode
 if [ "$MODE" = "covid" ]; then
@@ -25,10 +26,22 @@ echo "Running in $MODE mode"
 echo "  Train tasks: $TRAIN_TASKS"
 echo "  Test tasks: $TEST_TASKS"
 echo "  Log directory: $LOG_DIR"
+if [ -z "$LLM_MODEL" ]; then
+    echo "  LLM Models: Running all models in default list"
+else
+    echo "  LLM Model: $LLM_MODEL only"
+fi
 
 # LLM_MODELS=("gemma2B" "phi" "mistral" "llama" "deepseek-moe" "qwen-moe")
-LLM_MODELS=("GPT2Medium" "gemma2B")
-# LLM_MODELS=("DistilGPT2" "GPTNeo125M" "GPTNeo1.3B" "GPT2Medium")
+if [ -z "$LLM_MODEL" ]; then
+    # Use default list if no model specified
+    LLM_MODELS=("GPTNeo1.3B" "GPT2Medium" "gemma2B")
+else
+    # Use specified model
+    LLM_MODELS=("$LLM_MODEL")
+fi
+# LLM_MODELS=("DistilGPT2" "GPT2" "GPTNeo125M" "GPTNeo1.3B" "GPT2Medium")
+# LLM_MODELS=("GPT2")
 NUM_RUNS=3
 
 get_llm_dim() {
@@ -79,6 +92,7 @@ for MODEL in "${LLM_MODELS[@]}"; do
             --llm_dim "$LLM_DIM" \
             --d_ff "$LLM_DIM" \
             --wandb_name "$run_name" \
+            --use_8bit_quantization \
             ${HF_TOKEN:+--hf_token "$HF_TOKEN"} \
             ${WANDB_KEY:+--wandb_key "$WANDB_KEY"} \
             2>&1 | tee -a $LOG_FILE
