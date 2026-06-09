@@ -66,7 +66,6 @@ class RespLLM(nn.Module):
 
         self.use_audio = configs.use_audio
         self.use_context_ = configs.use_context_ 
-        self.audio_linear = configs.audio_linear
 
         if configs.llm_model == 'llama':
             # self.llama_config = LlamaConfig.from_pretrained('meta-llama/Meta-Llama-3-8B')
@@ -442,7 +441,6 @@ class RespLLM(nn.Module):
             self.aligner = nn.Linear(self.d_audio, self.d_llm)
         else:
             return NotImplementedError("aligner module undefined")
-        self.audio_classifier = nn.Linear(self.d_audio, self.n_cls)
         
         self.head_dropout = configs.head_dropout
         self.output_projection = FlattenHead(self.head_nf, self.n_cls, head_dropout=self.head_dropout)
@@ -495,12 +493,7 @@ class RespLLM(nn.Module):
             enc_out = self.aligner(x_enc)
         else:
             raise NotImplementedError
-        
-        if self.audio_linear:
-            # print("Using audio linear classifier!")
-            pred_audio = self.audio_classifier(x_enc)
-            return pred_audio
-        
+
         prompt = self.tokenizer(x_prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
         prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
 
