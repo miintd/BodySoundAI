@@ -67,8 +67,8 @@ class RespLLM(nn.Module):
 
         self.use_audio = configs.use_audio
         self.use_context_ = configs.use_context_ 
-        self.audio_linear = configs.audio_linear
-        self.context_dropout = configs.context_dropout
+        # self.audio_linear = configs.audio_linear
+        # self.context_dropout = configs.context_dropout
 
         if configs.llm_model == 'llama':
             # self.llama_config = LlamaConfig.from_pretrained('meta-llama/Meta-Llama-3-8B')
@@ -497,26 +497,26 @@ class RespLLM(nn.Module):
         else:
             raise NotImplementedError
         
-        if self.audio_linear:
-            # print("Using audio linear classifier!")
-            pred = self.audio_classifier(x_enc)
-            # print(pred)
-            return pred
+        # if self.audio_linear:
+        #     # print("Using audio linear classifier!")
+        #     pred = self.audio_classifier(x_enc)
+        #     # print(pred)
+        #     return pred
         
-        if self.training and self.context_dropout:
-            dropout_prob = 0.3  # Xác suất 30% giấu bệnh án (ép mô hình tự bơi)
-            x_context_dropped = []
+        # if self.training and self.context_dropout:
+        #     dropout_prob = 0.3  # Xác suất 30% giấu bệnh án (ép mô hình tự bơi)
+        #     x_context_dropped = []
             
-            # Giả định x_context là một list các chuỗi string trong batch
-            for ctx in x_context:
-                if torch.rand(1).item() < dropout_prob:
-                    # Rơi rụng: Thay thế context thật bằng chuỗi rỗng
-                    x_context_dropped.append("") 
-                else:
-                    # Giữ nguyên context
-                    x_context_dropped.append(ctx)
+        #     # Giả định x_context là một list các chuỗi string trong batch
+        #     for ctx in x_context:
+        #         if torch.rand(1).item() < dropout_prob:
+        #             # Rơi rụng: Thay thế context thật bằng chuỗi rỗng
+        #             x_context_dropped.append("") 
+        #         else:
+        #             # Giữ nguyên context
+        #             x_context_dropped.append(ctx)
                     
-            x_context = x_context_dropped
+        #     x_context = x_context_dropped
 
         prompt = self.tokenizer(x_prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
         prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
