@@ -16,7 +16,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
 transformers.logging.set_verbosity_error()
 
-token = ""
+# token = os.getenv("HF_TOKEN")
 
 OPERA_CT_TARGET_MODULES = ["qkv", "proj"]
 OPERA_CE_TARGET_MODULES = ['conv', 'fc', 'linear']
@@ -44,6 +44,7 @@ class RespLLM(nn.Module):
 
     def __init__(self, configs):
         super(RespLLM, self).__init__()
+        token = getattr(configs, "hf_token", None)
 
         self.loss = nn.CrossEntropyLoss()
         self.n_cls = configs.n_cls
@@ -66,6 +67,8 @@ class RespLLM(nn.Module):
 
         self.use_audio = configs.use_audio
         self.use_context_ = configs.use_context_ 
+        self.audio_linear = configs.audio_linear
+        self.context_dropout = configs.context_dropout
 
         if configs.llm_model == 'llama':
             # self.llama_config = LlamaConfig.from_pretrained('meta-llama/Meta-Llama-3-8B')
@@ -435,7 +438,7 @@ class RespLLM(nn.Module):
             self.audio_encoder = get_peft_model(self.audio_encoder, peft_config)
             self.audio_encoder.print_trainable_parameters()
             
-        
+        self.audio_classifier = nn.Linear(self.d_audio, self.n_cls)
 
         if configs.aligner == "projection":
             self.aligner = nn.Linear(self.d_audio, self.d_llm)
@@ -493,6 +496,27 @@ class RespLLM(nn.Module):
             enc_out = self.aligner(x_enc)
         else:
             raise NotImplementedError
+        
+        if self.audio_linear:
+            # print("Using audio linear classifier!")
+            pred = self.audio_classifier(x_enc)
+            # print(pred)
+            return pred
+        
+        if self.training and self.context_dropout:
+            dropout_prob = 0.3  # Xác suất 30% giấu bệnh án (ép mô hình tự bơi)
+            x_context_dropped = []
+            
+            # Giả định x_context là một list các chuỗi string trong batch
+            for ctx in x_context:
+                if torch.rand(1).item() < dropout_prob:
+                    # Rơi rụng: Thay thế context thật bằng chuỗi rỗng
+                    x_context_dropped.append("") 
+                else:
+                    # Giữ nguyên context
+                    x_context_dropped.append(ctx)
+                    
+            x_context = x_context_dropped
 
         prompt = self.tokenizer(x_prompt, return_tensors="pt", padding=True, truncation=True, max_length=2048).input_ids
         prompt_embeddings = self.llm_model.get_input_embeddings()(prompt.to(x_enc.device))  # (batch, prompt_token, dim)
