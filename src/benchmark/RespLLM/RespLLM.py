@@ -12,8 +12,8 @@ import random
 import requests
 from sklearn.model_selection import train_test_split
 
-from src.benchmark.RespLLM.model import RespLLM
-from src.benchmark.RespLLM.util import test, test_and_collect_predictions, get_dataloader, EarlyStopper, set_all_seed, log_confusion_matrix_and_errors
+from src.benchmark.RespLLM.model_ import RespLLM
+from src.benchmark.RespLLM.util_ import test, test_and_collect_predictions, get_dataloader, EarlyStopper, set_all_seed, log_confusion_matrix_and_errors
 # from src.benchmark.RespLLM.util import get_dataloader
 from src.benchmark.RespLLM.sampler import CategoriesSampler
 
@@ -408,6 +408,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--val_S3_S4", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--full_dataset", type=bool, default=False)
+    parser.add_argument("--test_mode", type=str, default="balanced")
     
     # Credentials from arguments
     parser.add_argument("--hf_token", type=str, default=None, help="HuggingFace API token")

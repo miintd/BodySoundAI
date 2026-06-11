@@ -10,12 +10,13 @@ from src.benchmark.model_util import get_encoder_path, initialize_pretrained_mod
 
 import pytorch_lightning as pl
 from torchmetrics import AUROC
+from einops import rearrange
 
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 transformers.logging.set_verbosity_error()
 
-token = ""
+# token = ""
 
 # giúp xác định phần nào cần fine-tuning
 OPERA_CT_TARGET_MODULES = ["qkv", "proj"]
@@ -43,6 +44,7 @@ class RespLLM(nn.Module):
     
     def __init__(self, configs):
         super(RespLLM, self).__init__()
+        token = getattr(configs, "hf_token", None)
 
         self.loss = nn.CrossEntropyLoss() # hàm mất mát
         self.n_cls = configs.n_cls # số lớp phân loại
@@ -68,7 +70,6 @@ class RespLLM(nn.Module):
 
         if configs.llm_model == 'llama':
             # self.llama_config = LlamaConfig.from_pretrained('meta-llama/Meta-Llama-3-8B') 
-            # hàm tải cấu hình của mô hình pre-trained huggyllama
             self.llama_config = LlamaConfig.from_pretrained('huggyllama/llama-7b') # 13.5G
             
             try: # tải mô hình llama từ trong máy
@@ -82,7 +83,6 @@ class RespLLM(nn.Module):
                 )
             except EnvironmentError:  # downloads model from HF is not already done
                 print("Local model files not found. Attempting to download...")
-                # nếu không tải được từ máy thì tải từ Hugging Face
                 self.llm_model = LlamaModel.from_pretrained(
                     # "meta-llama/Meta-Llama-3-8B",
                     'huggyllama/llama-7b',
@@ -91,7 +91,7 @@ class RespLLM(nn.Module):
                     config=self.llama_config,
                     # load_in_4bit=True
                 )
-            try: # tải tokenizer (biến văn bản thành chuỗi token)
+            try:
                 self.tokenizer = LlamaTokenizer.from_pretrained(
                     # "meta-llama/Meta-Llama-3-8B",
                     'huggyllama/llama-7b',
@@ -340,20 +340,47 @@ class RespLLM(nn.Module):
             self.llm_model = AutoModel.from_pretrained(
                 model_id, trust_remote_code=True, torch_dtype=torch.bfloat16
             )
+        elif configs.llm_model == "DistilGPT2":
+            model_id = "distilgpt2"
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
+            self.llm_model = AutoModel.from_pretrained(model_id, token = token)
+            print("Loading DistilGPT2")
+        elif configs.llm_model == "GPTNeo125M":
+            model_id = "EleutherAI/gpt-neo-125M"
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
+            self.llm_model = AutoModel.from_pretrained(model_id, token = token)
+            print("Loading GPT-Neo 125M")
+        elif configs.llm_model == "GPTNeo1.3B":
+            model_id = "EleutherAI/gpt-neo-1.3B"
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
+            self.llm_model = AutoModel.from_pretrained(model_id, token = token)
+            print("Loading GPT-Neo 1.3B")
+        elif configs.llm_model == "GPT2Medium":
+            model_id = "openai-community/gpt2-medium"
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
+            self.llm_model = AutoModel.from_pretrained(model_id, token = token)
+            print("Loading GPT-2 Medium (1.5B)")
+        elif configs.llm_model == "GPT2Large":
+            model_id = "openai-community/gpt2-large"
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
+            self.llm_model = AutoModel.from_pretrained(model_id, token = token)
+            print("Loading GPT-2 Large (3.5B)")
+        elif configs.llm_model == "GPT2XL":
+            model_id = "openai-community/gpt2-xl"
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
+            self.llm_model = AutoModel.from_pretrained(model_id, token = token)
+            print("Loading GPT-2 XL (1.5B)")
         else:
             raise NotImplementedError('LLM model is not defined')
-        
-        # thêm pad token để các token đưa vào có cùng độ dài
-        if self.tokenizer.eos_token: # token để kết thúc câu
+
+        if self.tokenizer.eos_token: 
             self.tokenizer.pad_token = self.tokenizer.eos_token
         else:
             pad_token = '[PAD]'
             self.tokenizer.add_special_tokens({'pad_token': pad_token})
             self.tokenizer.pad_token = pad_token
 
-        # áp dụng LoRA cho các model
         if self.llm_peft == "lora":
-            # khởi tạo cấu hình LoRA
             self.peft_config = LoraConfig(
                 r=self.llm_lora_rank, 
                 lora_alpha=self.llm_lora_alpha, 
@@ -458,8 +485,7 @@ class RespLLM(nn.Module):
         elif self.modality_encoder_type == "llm_embeddings":
             modality_dim = self.llm_model.config.hidden_size
         elif self.modality_encoder_type == "learnable":
-            # embed_dim = configs.modality_embed_dim  # hyperparameter, ví dụ 16, 32, 64
-            print(len(modality_classes))
+            # print(len(modality_classes))
             embed_dim = 10
             self.modality_embedding = nn.Embedding(len(modality_classes), embed_dim)
             modality_dim = embed_dim
@@ -467,6 +493,7 @@ class RespLLM(nn.Module):
         self.classifier_raw = nn.Linear(modality_dim + self.llm_model.config.hidden_size, self.n_cls)
 
         self.output_projection = FlattenHead(self.head_nf, self.n_cls, head_dropout=self.head_dropout)
+
         self.print_trainable()
 
     def reinitialize_clf(self, n_cls): 
@@ -512,7 +539,6 @@ class RespLLM(nn.Module):
             modality_vec = indices
 
         elif self.modality_encoder_type == "bert":
-            # Encode từng modality string qua BERT, lấy [CLS] token
             tokens = self.bert_tokenizer(x_modality,return_tensors="pt",padding=True,truncation=True,max_length=16).to(device)
             with torch.no_grad():
                 bert_out = self.bert_model(**tokens)
@@ -565,12 +591,12 @@ class RespLLM(nn.Module):
         else:
             llama_enc_out = torch.cat([prompt_embeddings, context_embeddings], dim=1)
 
-        if self.modal_embs is not None:
-            # print("Using modality embeddings!")
-            modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
-            modality_vec = modality_vec.to(self.modality_projector.weight.dtype)
-            modality_vec = self.modality_projector(modality_vec).unsqueeze(1)
-            llama_enc_out = torch.cat([llama_enc_out, modality_vec], dim=1)
+        # if self.modal_embs is not None:
+        #     # print("Using modality embeddings!")
+        #     modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
+        #     modality_vec = modality_vec.to(self.modality_projector.weight.dtype)
+        #     modality_vec = self.modality_projector(modality_vec).unsqueeze(1)
+        #     llama_enc_out = torch.cat([llama_enc_out, modality_vec], dim=1)
 
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
         # print("dec_out shape:", dec_out.shape)
@@ -580,31 +606,31 @@ class RespLLM(nn.Module):
         # print("dec_out shape before flatten head:", dec_out.shape)
         
         # dec_out = dec_out.to(dtype=torch.float32)
-        # if self.modal_embs is not None:
-        #     # print("Using modality embeddings!")
-        #     modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
+        if self.modal_embs is not None:
+            # print("Using modality embeddings!")
+            modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
 
-        #     if self.modal_embs == "projected_concat":
-        #         dec_out = self.feature_head(dec_out[:, :, -self.patch_nums:])
-        #         # print("dec_out shape after flatten head:", dec_out.shape)
-        #         modality_vec = self.modality_projector(modality_vec)      # (batch, 10)
-        #         # print("modality_vec shape:", modality_vec.shape)
-        #         fused = torch.cat([dec_out, modality_vec], dim=1)      
-        #         # print("dec_out shape after adding modality vector:", dec_out.shape)
-        #         dec_out = self.classifier(fused)                          # (batch, 2)
-        #         # print("dec_out shape after final fc:", dec_out.shape)
-        #     elif self.modal_embs == "raw_concat":
-        #         dec_flat = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=True)
-        #         # print("dec_out shape after flatten head:", dec_flat.shape)
-        #         # print("modality_vec shape:", modality_vec.shape)
-        #         fused = torch.cat([dec_flat, modality_vec], dim=1)
-        #         # print("dec_out shape after adding modality vector:", fused.shape)
-        #         dec_out = self.classifier_raw(fused)
-        #         # print("dec_out shape after final fc:", dec_out.shape)
-        # else:
-        #     # print("Not using modality embeddings!")
-        #     dec_out = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=no_fc)
-        dec_out = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=no_fc)
+            if self.modal_embs == "projected_concat":
+                dec_out = self.feature_head(dec_out[:, :, -self.patch_nums:])
+                # print("dec_out shape after flatten head:", dec_out.shape)
+                modality_vec = self.modality_projector(modality_vec)      # (batch, 10)
+                # print("modality_vec shape:", modality_vec.shape)
+                fused = torch.cat([dec_out, modality_vec], dim=1)      
+                # print("dec_out shape after adding modality vector:", dec_out.shape)
+                dec_out = self.classifier(fused)                          # (batch, 2)
+                # print("dec_out shape after final fc:", dec_out.shape)
+            elif self.modal_embs == "raw_concat":
+                dec_flat = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=True)
+                # print("dec_out shape after flatten head:", dec_flat.shape)
+                # print("modality_vec shape:", modality_vec.shape)
+                fused = torch.cat([dec_flat, modality_vec], dim=1)
+                # print("dec_out shape after adding modality vector:", fused.shape)
+                dec_out = self.classifier_raw(fused)
+                # print("dec_out shape after final fc:", dec_out.shape)
+        else:
+            # print("Not using modality embeddings!")
+            dec_out = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=no_fc)
+        # dec_out = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=no_fc)
 
         return dec_out
     

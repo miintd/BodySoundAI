@@ -3,7 +3,7 @@ import pandas as pd
 import torch
 from torch import nn
 from torch.nn import functional as F
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import classification_report, confusion_matrix, f1_score
 from torchmetrics import AUROC
 from tqdm import tqdm
 import os
@@ -17,6 +17,7 @@ import pickle
 import copy
 from numpy import linalg as LA
 import random
+from typing import List, Tuple
  
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -101,7 +102,67 @@ class EarlyStopper:
                 return True
         return False
 
+class CLIPLoss(torch.nn.Module):
+    """
+    Loss function for multimodal contrastive learning based off of the CLIP paper.
+    
+    Embeddings are taken, L2 normalized and dot product between modalities is calculated to generate a cosine
+    similarity between all combinations of subjects in a cross-modal fashion. Tempered by temperature.
+    Loss is calculated attempting to match each subject's embeddings between the modalities i.e. the diagonal. 
+    """
+    def __init__(self, 
+                temperature: float,
+                lambda_0: float = 0.5) -> None:
+        super(CLIPLoss, self).__init__()
 
+        self.temperature = temperature
+        self.cross_entropy = nn.CrossEntropyLoss(reduction='mean')
+
+        if lambda_0 > 1 or lambda_0 < 0:
+            raise ValueError('lambda_0 must be a float between 0 and 1.')
+        self.lambda_0 = lambda_0
+        self.lambda_1 = 1-lambda_0
+
+    def forward(self, out0: torch.Tensor, out1: torch.Tensor, indices: List[int] = None) -> Tuple:
+        # normalize the embedding onto the unit hypersphere
+        out0 = nn.functional.normalize(out0, dim=1)
+        out1 = nn.functional.normalize(out1, dim=1)
+
+        #logits = torch.matmul(out0, out1.T) * torch.exp(torch.tensor(self.temperature))
+        logits = torch.matmul(out0, out1.T) / self.temperature
+        labels = torch.arange(len(out0), device=out0.device)
+
+        #labels = labels.unsqueeze(1).expand(labels.shape[0], logits.shape[1])
+
+        loss_0 = self.lambda_0 * self.cross_entropy(logits, labels)
+        loss_1 = self.lambda_1 * self.cross_entropy(logits.T, labels)
+        loss = loss_0 + loss_1
+    
+        return loss, logits, labels
+
+    def loss_coteaching(y_1, y_2, t, forget_rate, abs_loss=None):
+        loss_1 = F.cross_entropy(y_1, t, reduce = False)
+        ind_1_sorted = np.argsort(loss_1.cpu().data).cuda()
+        loss_1_sorted = loss_1[ind_1_sorted]
+
+        loss_2 = F.cross_entropy(y_2, t, reduce = False)
+        ind_2_sorted = np.argsort(loss_2.cpu().data).cuda()
+
+        remember_rate = 1 - forget_rate
+        num_remember = int(remember_rate * len(loss_1_sorted))
+
+        ind_1_update=ind_1_sorted[:num_remember]
+        ind_2_update=ind_2_sorted[:num_remember]
+        # exchange
+        if abs_loss is None:
+            loss_1_update = F.cross_entropy(y_1[ind_2_update], t[ind_2_update])
+            loss_2_update = F.cross_entropy(y_2[ind_1_update], t[ind_1_update])
+        else:    
+            loss_1_update = abs_loss.compute(y_1[ind_2_update], t[ind_2_update])
+            loss_2_update = abs_loss.compute(y_2[ind_1_update], t[ind_1_update])
+
+        return torch.sum(loss_1_update), torch.sum(loss_2_update)
+    
 def itr_merge(*itrs):
     for itr in itrs:
         for v in itr:
@@ -537,11 +598,21 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
             group4_indices_test, group4_indices_train = sample_indices(group4_indices, test_size)
 
             # Combine test and training indices
-            indices_test = np.concatenate([group1_indices_test, group2_indices_test, group3_indices_test, group4_indices_test])
-            indices_train = np.concatenate([group1_indices_train, group2_indices_train, group3_indices_train, group4_indices_train])
-            
-            # indices_test = np.concatenate([group2_indices, group4_indices])
-            # indices_train = np.concatenate([group1_indices, group3_indices])
+            if configs.test_mode == "balanced":
+                indices_test = np.concatenate([group1_indices_test, group2_indices_test, group3_indices_test, group4_indices_test])
+                indices_train = np.concatenate([group1_indices_train, group2_indices_train, group3_indices_train, group4_indices_train])
+            elif configs.test_mode == "gr1v3":
+                indices_test = np.concatenate([group1_indices, group3_indices])
+                indices_train = np.concatenate([group2_indices, group4_indices])
+            elif configs.test_mode == "gr2v4":
+                indices_test = np.concatenate([group2_indices, group4_indices])
+                indices_train = np.concatenate([group1_indices, group3_indices])
+            elif configs.test_mode == "gr1v4":
+                indices_test = np.concatenate([group1_indices, group4_indices])
+                indices_train = np.concatenate([group2_indices, group3_indices])
+            elif configs.test_mode == "gr2v3":
+                indices_test = np.concatenate([group2_indices, group3_indices])
+                indices_train = np.concatenate([group1_indices, group4_indices])
             
             print("train")
             for indices_array in [group1_indices_train, group2_indices_train, group3_indices_train, group4_indices_train]:
@@ -1085,16 +1156,17 @@ def test(model, test_loader, loss_func, n_cls, plot_feature="", plot_only=False,
     # tính auc
     auroc = AUROC(task="multiclass", num_classes=n_cls)
     auc = auroc(torch.from_numpy(probs), torch.from_numpy(y))
+    f1 = f1_score(y, predicted, average="macro")
 
     if verbose:
         print("loss", total_loss)
-        print("acc", acc)
-        print("auc", auc)
+        print(f"auc: {auc} | f1: {f1} | acc: {acc}")
         if print_cm:
             print(f"TP: {TP}")
             print(f"TN: {TN}")
             print(f"FP: {FP}")
             print(f"FN: {FN}")
+            print(classification_report(y, predicted))
 
 
     if return_auc:
