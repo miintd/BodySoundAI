@@ -4,8 +4,9 @@
 # Example: bash scripts/add_modal_embs.sh full 2 "hf_xxxxx" "wandb_xxxxx"
 # Example: bash scripts/add_modal_embs.sh covid 2 "hf_xxxxx" "wandb_xxxxx"
 
+mkdir -p logs_llm_audio_type
 MODE=${1:-full}
-BATCH_SIZE=${2:-2}
+BATCH_SIZE=${2:-16}
 HF_TOKEN=${3:-""}
 WANDB_KEY=${4:-""}
 
@@ -13,11 +14,11 @@ WANDB_KEY=${4:-""}
 if [ "$MODE" = "covid" ]; then
     TRAIN_TASKS="S1,S2,S3,S4"
     TEST_TASKS="T1,T2,T3,T4"
-    LOG_DIR="logs_llm_fixed_seed/COVID"
+    LOG_DIR="logs_llm_cross_fusion/COVID"
 else
     TRAIN_TASKS="S1,S2,S3,S4,S5,S6,S7"
     TEST_TASKS="T1,T2,T3,T4,T5,T6"
-    LOG_DIR="logs_llm_fixed_seed"
+    LOG_DIR="logs_llm_cross_fusion"
 fi
 
 mkdir -p "$LOG_DIR"
@@ -26,14 +27,20 @@ echo "  Train tasks: $TRAIN_TASKS"
 echo "  Test tasks: $TEST_TASKS"
 echo "  Log directory: $LOG_DIR"
 
-encoder=("learnable" "llm_embeddings")
+encoder=("label")
 
-LLM_MODELS=("gemma2B")
-NUM_RUNS=1
+LLM_MODELS=("GPT2Medium" "GPT2Large" "GPT2XL" "gemma2B")
+NUM_RUNS=3
 
 get_llm_dim() {
     case "$1" in
         GPT2) echo 768 ;;
+        DistilGPT2) echo 768 ;;
+        GPTNeo125M) echo 768 ;;
+        GPTNeo1.3B) echo 2048 ;;
+        GPT2Medium) echo 1024 ;;
+        GPT2Large) echo 1280 ;;
+        GPT2XL) echo 1600 ;;
         gemma2B) echo 2304 ;;
         phi)     echo 3072 ;;
         mistral) echo 4096 ;;
@@ -54,10 +61,6 @@ get_llm_dim() {
 #         qwen-moe) echo 1 ;;
 #     esac
 # }
-
-# ########################################
-# # 3. FEATURE MODE 
-# ########################################
 
 # modal_dims=(32)
 # feature_dims=(768)
@@ -82,18 +85,14 @@ get_llm_dim() {
 
 #     done
 # done 
-########################################
-# 2. RAW CONCAT MODE
-########################################
 
-echo "Running RAW CONCAT mode"
 for MODEL in "${LLM_MODELS[@]}"; do
     LLM_DIM=$(get_llm_dim "$MODEL")
     # BATCH_SIZE=$(get_batch_size "$MODEL")
     for ((RUN=1;RUN<=NUM_RUNS; RUN++)); do    
         echo "Model: $MODEL | Run $RUN/$NUM_RUNS"
         for enc in "${encoder[@]}"; do
-        LOG_FILE="$LOG_DIR/out_${MODEL}_${enc}_${RUN}_early_fusion.txt"
+        LOG_FILE="$LOG_DIR/out_${MODEL}_${enc}_${RUN}.txt"
 
         if [ -f "$LOG_FILE" ]; then
             if grep -q "torch.cuda.OutOfMemoryError\|CUDA out of memory" "$LOG_FILE"; then
@@ -129,50 +128,89 @@ for MODEL in "${LLM_MODELS[@]}"; do
         done
     done
 done
+# echo "Running DEFAULT mode"
+# for MODEL in "${LLM_MODELS[@]}"; do
+#     LLM_DIM=$(get_llm_dim "$MODEL")
+#     # BATCH_SIZE=$(get_batch_size "$MODEL")
+#     for ((RUN=1;RUN<=NUM_RUNS; RUN++)); do    
+#         echo "Model: $MODEL | Run $RUN/$NUM_RUNS"
+#         LOG_FILE="$LOG_DIR/out_${MODEL}_${RUN}_audio.txt"
 
-# for ((RUN=1;RUN<=NUM_RUNS; RUN++))
-# do    echo "Run $RUN/$NUM_RUNS"
-#     for enc in "${encoder[@]}"
-#     do
-#     LOG_FILE="logs_llm_fixed_valloss/out_${LLM_MODEL}_${enc}_${RUN}_add_val_S3_S4.txt"
-
-#     if [ -f "$LOG_FILE" ]; then
-#         echo "  [SKIP] Log file $LOG_FILE exists. Skipping $enc run $RUN."
-#         continue
-#     fi
-#         echo "Running RAW CONCAT mode with encoder: $enc"
-#         run_name="raw_concat_${enc}_run${RUN}_add_val_S3_S4"
+#         if [ -f "$LOG_FILE" ]; then
+#             if grep -q "torch.cuda.OutOfMemoryError\|CUDA out of memory" "$LOG_FILE"; then
+#                 echo "[OOM] Re-running $MODEL run $RUN (out of memory)"
+#                 rm "$LOG_FILE"
+#             elif grep -q "Traceback\|Error" "$LOG_FILE"; then
+#                 echo "[ERROR] Re-running $MODEL run $RUN (non-OOM error)"
+#                 rm "$LOG_FILE"
+#             else
+#                 echo "[SKIP] $MODEL run $RUN (assumed success)"
+#                 continue
+#             fi
+#         fi
+#         run_name="cross_fusion_run${RUN}_${MODE}"
 #         python src/benchmark/RespLLM/RespLLM.py \
-#             $COMMON_ARGS \
-#             --modality_encoder_type "$enc" \
-#             --modal_embs raw_concat \
+#             --llm_model $MODEL \
+#             --train_tasks "$TRAIN_TASKS" \
+#             --test_tasks "$TEST_TASKS" \
+#             --train_epochs 60 \
+#             --meta_val_interval 3 \
+#             --meta_val_shot 20 \
+#             --train_pct 1 \
+#             --batch_size $BATCH_SIZE \
+#             --llm_dim ${LLM_DIM} \
+#             --d_ff ${LLM_DIM} \
+#             --crossatt_fusion \
+#             --no-use_context_ \
 #             --wandb_name "$run_name" \
-#             --no-val_S3_S4 \
-#             --save_pth cks/audio_type/"${LLM_MODEL}_${enc}_run${RUN}.pth" \
+#             ${HF_TOKEN:+--hf_token "$HF_TOKEN"} \
+#             ${WANDB_KEY:+--wandb_key "$WANDB_KEY"} \
 #             2>&1 | tee -a "$LOG_FILE"
 #     done
 # done
 
-# NUM_RUNS=3
-# for ((RUN=1; RUN<=NUM_RUNS; RUN++)); do
-# for enc in "${encoder[@]}"; do
-#     LOG_FILE="logs_24_4_26/out_AudioBert_${enc}_${RUN}.txt"
+# echo "Running RAW CONCAT mode"
+# for MODEL in "${LLM_MODELS[@]}"; do
+#     LLM_DIM=$(get_llm_dim "$MODEL")
+#     # BATCH_SIZE=$(get_batch_size "$MODEL")
+#     for ((RUN=1;RUN<=NUM_RUNS; RUN++)); do    
+#         echo "Model: $MODEL | Run $RUN/$NUM_RUNS"
+#         for enc in "${encoder[@]}"; do
+#         LOG_FILE="$LOG_DIR/out_${MODEL}_${enc}_${RUN}_early_fusion.txt"
 
-#     if [ -f "$LOG_FILE" ]; then
-#         echo "  [SKIP] Log file $LOG_FILE exists. Skipping fusion run $RUN."
-#         continue
-#     fi
+#         if [ -f "$LOG_FILE" ]; then
+#             if grep -q "torch.cuda.OutOfMemoryError\|CUDA out of memory" "$LOG_FILE"; then
+#                 echo "[OOM] Re-running $MODEL run $RUN (out of memory)"
+#                 rm "$LOG_FILE"
+#             elif grep -q "Traceback\|Error" "$LOG_FILE"; then
+#                 echo "[ERROR] Re-running $MODEL run $RUN (non-OOM error)"
+#                 rm "$LOG_FILE"
+#             else
+#                 echo "[SKIP] $MODEL run $RUN (assumed success)"
+#                 continue
+#             fi
+#         fi
+#             echo "Running RAW CONCAT mode with encoder: $enc"
+#             run_name="raw_concat_${enc}_run${RUN}_${MODE}"
+#             python src/benchmark/RespLLM/RespLLM.py \
+#                 --llm_model $MODEL \
+#                 --train_tasks "$TRAIN_TASKS" \
+#                 --test_tasks "$TEST_TASKS" \
+#                 --train_epochs 60 \
+#                 --meta_val_interval 3 \
+#                 --meta_val_shot 20 \
+#                 --train_pct 1 \
+#                 --batch_size $BATCH_SIZE \
+#                 --crossatt_fusion \
+#                 --llm_dim ${LLM_DIM} \
+#                 --d_ff ${LLM_DIM} \
+#                 --modality_encoder_type "$enc" \
+#                 --modal_embs raw_concat \
+#                 --wandb_name "$run_name" \
+#                 ${HF_TOKEN:+--hf_token "$HF_TOKEN"} \
+#                 ${WANDB_KEY:+--wandb_key "$WANDB_KEY"} \
+#                 2>&1 | tee -a "$LOG_FILE"
+#         done
+#     done
+# done
 
-#     echo "  Fusion Model | Run: $RUN / $NUM_RUNS | batch: 32"
-#     python src/benchmark/RespLLM/model_bts.py \
-#         --train_tasks S1,S2,S3,S4,S5,S6,S7 \
-#         --test_tasks T1,T2,T3,T4,T5,T6 \
-#         --train_epochs 60 \
-#         --batch_size 32 \
-#         --modality_encoder_type "$enc" \
-#         --modal_embs raw_concat \
-#         --save_pth cks/fusion/fusion_run${RUN}_best_epoch.pth \
-#         --wandb_name "fusion_run_${enc}" \
-#         2>&1 | tee -a "$LOG_FILE"
-# done
-# done
