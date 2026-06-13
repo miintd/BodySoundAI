@@ -10,7 +10,6 @@ from src.benchmark.model_util import get_encoder_path, initialize_pretrained_mod
 
 import pytorch_lightning as pl
 from torchmetrics import AUROC
-from einops import rearrange
 
 import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
