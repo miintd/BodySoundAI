@@ -29,7 +29,7 @@ echo "  Log directory: $LOG_DIR"
 
 encoder=("llm_embeddings")
 
-LLM_MODELS=("GPT2Medium")
+LLM_MODELS=("GPT2")
 NUM_RUNS=3
 
 get_llm_dim() {
@@ -134,7 +134,7 @@ for MODEL in "${LLM_MODELS[@]}"; do
     for ((RUN=1;RUN<=NUM_RUNS; RUN++)); do    
         echo "Model: $MODEL | Run $RUN/$NUM_RUNS"
         for enc in "${encoder[@]}"; do
-        LOG_FILE="$LOG_DIR/out_${MODEL}_${enc}_${RUN}.txt"
+        LOG_FILE="$LOG_DIR/out_${MODEL}_${enc}_${RUN}_audiolast.txt"
 
         if [ -f "$LOG_FILE" ]; then
             if grep -q "torch.cuda.OutOfMemoryError\|CUDA out of memory" "$LOG_FILE"; then
