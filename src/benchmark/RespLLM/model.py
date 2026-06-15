@@ -583,20 +583,26 @@ class RespLLM(nn.Module):
 
         if self.use_audio and self.use_context_:
             # print("Using audio embeddings!")
-            llama_enc_out = torch.cat([prompt_embeddings, context_embeddings, enc_out], dim=1)
+            if self.modal_embs == "modal_last":
+            # print("Using modality embeddings!")
+                modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
+                modality_vec = modality_vec.to(self.modality_projector.weight.dtype)
+                modality_vec = self.modality_projector(modality_vec).unsqueeze(1)
+                llama_enc_out = torch.cat([prompt_embeddings, context_embeddings, enc_out, modality_vec], dim=1)
+            elif self.modal_embs == "audio_last":
+                modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
+                modality_vec = modality_vec.to(self.modality_projector.weight.dtype)
+                modality_vec = self.modality_projector(modality_vec).unsqueeze(1)
+                llama_enc_out = torch.cat([prompt_embeddings, context_embeddings, modality_vec, enc_out], dim=1)
+            elif self.modal_embs == None:
+                llama_enc_out = torch.cat([prompt_embeddings, context_embeddings, enc_out], dim=1)
         elif self.use_audio and not self.use_context_:
             # print("Warning: not using context embeddings!")
             llama_enc_out = torch.cat([prompt_embeddings, enc_out], dim=1)
         else:
             llama_enc_out = torch.cat([prompt_embeddings, context_embeddings], dim=1)
 
-        # if self.modal_embs is not None:
-        #     # print("Using modality embeddings!")
-        #     modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
-        #     modality_vec = modality_vec.to(self.modality_projector.weight.dtype)
-        #     modality_vec = self.modality_projector(modality_vec).unsqueeze(1)
-        #     llama_enc_out = torch.cat([llama_enc_out, modality_vec], dim=1)
-
+        
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
         # print("dec_out shape:", dec_out.shape)
         dec_out = dec_out[:, :, :self.d_ff]
@@ -605,31 +611,31 @@ class RespLLM(nn.Module):
         # print("dec_out shape before flatten head:", dec_out.shape)
         
         # dec_out = dec_out.to(dtype=torch.float32)
-        if self.modal_embs is not None:
-            # print("Using modality embeddings!")
-            modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
+        # if self.modal_embs is not None:
+        #     # print("Using modality embeddings!")
+        #     modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
 
-            if self.modal_embs == "projected_concat":
-                dec_out = self.feature_head(dec_out[:, :, -self.patch_nums:])
-                # print("dec_out shape after flatten head:", dec_out.shape)
-                modality_vec = self.modality_projector(modality_vec)      # (batch, 10)
-                # print("modality_vec shape:", modality_vec.shape)
-                fused = torch.cat([dec_out, modality_vec], dim=1)      
-                # print("dec_out shape after adding modality vector:", dec_out.shape)
-                dec_out = self.classifier(fused)                          # (batch, 2)
-                # print("dec_out shape after final fc:", dec_out.shape)
-            elif self.modal_embs == "raw_concat":
-                dec_flat = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=True)
-                # print("dec_out shape after flatten head:", dec_flat.shape)
-                # print("modality_vec shape:", modality_vec.shape)
-                fused = torch.cat([dec_flat, modality_vec], dim=1)
-                # print("dec_out shape after adding modality vector:", fused.shape)
-                dec_out = self.classifier_raw(fused)
-                # print("dec_out shape after final fc:", dec_out.shape)
-        else:
-            # print("Not using modality embeddings!")
-            dec_out = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=no_fc)
-        # dec_out = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=no_fc)
+        #     if self.modal_embs == "projected_concat":
+        #         dec_out = self.feature_head(dec_out[:, :, -self.patch_nums:])
+        #         # print("dec_out shape after flatten head:", dec_out.shape)
+        #         modality_vec = self.modality_projector(modality_vec)      # (batch, 10)
+        #         # print("modality_vec shape:", modality_vec.shape)
+        #         fused = torch.cat([dec_out, modality_vec], dim=1)      
+        #         # print("dec_out shape after adding modality vector:", dec_out.shape)
+        #         dec_out = self.classifier(fused)                          # (batch, 2)
+        #         # print("dec_out shape after final fc:", dec_out.shape)
+        #     elif self.modal_embs == "raw_concat":
+        #         dec_flat = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=True)
+        #         # print("dec_out shape after flatten head:", dec_flat.shape)
+        #         # print("modality_vec shape:", modality_vec.shape)
+        #         fused = torch.cat([dec_flat, modality_vec], dim=1)
+        #         # print("dec_out shape after adding modality vector:", fused.shape)
+        #         dec_out = self.classifier_raw(fused)
+        #         # print("dec_out shape after final fc:", dec_out.shape)
+        # else:
+        #     # print("Not using modality embeddings!")
+        #     dec_out = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=no_fc)
+        dec_out = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=no_fc)
 
         return dec_out
     
