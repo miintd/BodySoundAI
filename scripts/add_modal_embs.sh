@@ -29,7 +29,7 @@ echo "  Log directory: $LOG_DIR"
 
 encoder=("llm_embeddings")
 
-LLM_MODELS=("GPT2")
+LLM_MODELS=("GPT2Medium")
 NUM_RUNS=3
 
 get_llm_dim() {
