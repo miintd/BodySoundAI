@@ -120,7 +120,7 @@ for MODEL in "${LLM_MODELS[@]}"; do
                 --llm_dim ${LLM_DIM} \
                 --d_ff ${LLM_DIM} \
                 --modality_encoder_type "$enc" \
-                --modal_embs model_last \
+                --modal_embs modal_last \
                 --wandb_name "$run_name" \
                 ${HF_TOKEN:+--hf_token "$HF_TOKEN"} \
                 ${WANDB_KEY:+--wandb_key "$WANDB_KEY"} \
