@@ -3,7 +3,7 @@ import pandas as pd
 import torch
 from torch import nn
 from torch.nn import functional as F
-from sklearn.metrics import confusion_matrix
+from sklearn.metrics import confusion_matrix, classification_report, f1_score
 from torchmetrics import AUROC
 from tqdm import tqdm
 import os
@@ -98,7 +98,6 @@ class EarlyStopper:
             if self.counter >= self.patience:
                 return True
         return False
-
 
 def itr_merge(*itrs):
     for itr in itrs:
@@ -510,12 +509,22 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
             group4_indices_test, group4_indices_train = sample_indices(group4_indices, test_size)
 
             # Combine test and training indices
-            indices_test = np.concatenate([group1_indices_test, group2_indices_test, group3_indices_test, group4_indices_test])
-            indices_train = np.concatenate([group1_indices_train, group2_indices_train, group3_indices_train, group4_indices_train])
-            
-            # indices_test = np.concatenate([group2_indices, group4_indices])
-            # indices_train = np.concatenate([group1_indices, group3_indices])
-            
+            if configs.test_mode == "balanced":
+                indices_test = np.concatenate([group1_indices_test, group2_indices_test, group3_indices_test, group4_indices_test])
+                indices_train = np.concatenate([group1_indices_train, group2_indices_train, group3_indices_train, group4_indices_train])
+            elif configs.test_mode == "gr1v3":
+                indices_test = np.concatenate([group1_indices, group3_indices])
+                indices_train = np.concatenate([group2_indices, group4_indices])
+            elif configs.test_mode == "gr2v4":
+                indices_test = np.concatenate([group2_indices, group4_indices])
+                indices_train = np.concatenate([group1_indices, group3_indices])
+            elif configs.test_mode == "gr1v4":
+                indices_test = np.concatenate([group1_indices, group4_indices])
+                indices_train = np.concatenate([group2_indices, group3_indices])
+            elif configs.test_mode == "gr2v3":
+                indices_test = np.concatenate([group2_indices, group3_indices])
+                indices_train = np.concatenate([group1_indices, group4_indices])
+
             print("train")
             for indices_array in [group1_indices_train, group2_indices_train, group3_indices_train, group4_indices_train]:
                 print(len(indices_array), end=";")
@@ -973,13 +982,17 @@ def upsample_balanced_dataset(x_train, metadata_train, y_train):
     return x_train_upsampled, metadata_upsampled, y_train_upsampled
 
 
-
-def test(model, test_loader, loss_func, n_cls, plot_feature="", plot_only=False, return_auc=False, verbose=True, print_cm=True):
+def test(model, test_loader, loss_func, n_cls, plot_feature="", plot_only=False, return_auc=False, verbose=True, print_cm=True, 
+         use_rule_base=False, dataset_name=None):
     total_loss = []
     test_step_outputs = []
     features = []
     model.eval()
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu") 
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    
+    # Flag to enable rule-based prediction for Coswara dataset
+    enable_rule_base = use_rule_base and dataset_name == "coswara"
+    
     with torch.no_grad():
         for i,  (x1, x2, x3, y) in enumerate(test_loader):
             x1 = x1.to(device)
@@ -987,6 +1000,28 @@ def test(model, test_loader, loss_func, n_cls, plot_feature="", plot_only=False,
             y = y.to(device)
             # print(n_cls, y)
             y_hat = model(x1, x2, x3)
+            
+            # Apply rule-based prediction fallback if enabled
+            if enable_rule_base:
+                batch_size = x1.shape[0]
+                rule_based_logits = torch.zeros_like(y_hat)
+                
+                # Process each sample in the batch
+                for batch_idx in range(batch_size):
+                    context = x3[batch_idx] if isinstance(x3, list) else x3[batch_idx] if isinstance(x3, (tuple, np.ndarray)) else str(x3)
+                    has_symptoms = "following respiratory symptoms" in context.lower()
+        
+                    rule_based_logits[batch_idx] = torch.tensor([0.0, 1.0] if has_symptoms else [1.0, 0.0], device=device)
+                #     if i == 0:
+                #         pred_class = 1 if has_symptoms else 0
+                #         print(f"  Sample {batch_idx}: has_symptoms={has_symptoms} | pred={pred_class} | context='{context[:80]}...'")
+                
+                # if i == 0:
+                #     print(f"\n  rule_based_logits (batch 0):\n{rule_based_logits}")
+                #     print(f"  predicted classes: {torch.argmax(rule_based_logits, dim=1).tolist()}\n")
+                
+                y_hat = rule_based_logits
+            
             if plot_feature: 
                 feature = model(x1, x2, x3, no_fc=True)
                 features.append(feature.detach().cpu().numpy())
@@ -1026,17 +1061,17 @@ def test(model, test_loader, loss_func, n_cls, plot_feature="", plot_only=False,
 
     auroc = AUROC(task="multiclass", num_classes=n_cls)
     auc = auroc(torch.from_numpy(probs), torch.from_numpy(y))
+    f1 = f1_score(y, predicted, average="macro")
 
     if verbose:
         print("loss", total_loss)
-        print("acc", acc)
-        print("auc", auc)
+        print(f"auc: {auc} | f1: {f1} | acc: {acc}")
         if print_cm:
             print(f"TP: {TP}")
             print(f"TN: {TN}")
             print(f"FP: {FP}")
             print(f"FN: {FN}")
-
+            print(classification_report(y, predicted))
 
     if return_auc:
         return acc, auc, total_loss 
