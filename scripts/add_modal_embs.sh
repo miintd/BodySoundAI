@@ -30,7 +30,7 @@ echo "  Log directory: $LOG_DIR"
 encoder=("llm_embeddings")
 
 LLM_MODELS=("GPT2Medium" "GPT2Large" "gemma2B")
-NUM_RUNS=1
+NUM_RUNS=3
 
 get_llm_dim() {
     case "$1" in
@@ -86,15 +86,55 @@ get_llm_dim() {
 #     done
 # done 
 
+# for MODEL in "${LLM_MODELS[@]}"; do
+#     LLM_DIM=$(get_llm_dim "$MODEL")
+#     for ((RUN=1; RUN<=NUM_RUNS; RUN++)); do
+#         run_name="${MODEL}_run${RUN}_full"
+#         LOG_FILE="$LOG_DIR/out_${MODEL}_${RUN}.txt"
+        
+#         if [ -f "$LOG_FILE" ]; then
+#             if grep -q "torch.cuda.OutOfMemoryError\|CUDA out of memory" "$LOG_FILE"; then
+#                 echo "[OOM] Re-running $MODEL run $RUN"
+#                 rm "$LOG_FILE"
+#             elif grep -q "Traceback\|Error" "$LOG_FILE"; then
+#                 echo "[ERROR] Re-running $MODEL run $RUN (non-OOM error)"
+#                 rm "$LOG_FILE"
+#             else
+#                 echo "[SKIP] $MODEL run $RUN (assumed success)"
+#                 continue
+#             fi
+#         fi
+#         echo "  Model: $MODEL | Run: $RUN / $NUM_RUNS | llm_dim: $LLM_DIM"
+
+#         python src/benchmark/RespLLM/RespLLM.py \
+#             --llm_model "$MODEL" \
+#             --train_tasks "$TRAIN_TASKS" \
+#             --test_tasks "$TEST_TASKS" \
+#             --train_epochs 60 \
+#             --meta_val_interval 3 \
+#             --train_pct 1 \
+#             --batch_size "$BATCH_SIZE" \
+#             --llm_dim "$LLM_DIM" \
+#             --d_ff "$LLM_DIM" \
+#             --wandb_name "$run_name" \
+#             ${HF_TOKEN:+--hf_token "$HF_TOKEN"} \
+#             ${WANDB_KEY:+--wandb_key "$WANDB_KEY"} \
+#             2>&1 | tee -a $LOG_FILE
+
+#         echo "  Done: $MODEL run $RUN"
+#     done
+# done
 for MODEL in "${LLM_MODELS[@]}"; do
     LLM_DIM=$(get_llm_dim "$MODEL")
-    for ((RUN=1; RUN<=NUM_RUNS; RUN++)); do
-        run_name="${MODEL}_run${RUN}_full"
-        LOG_FILE="$LOG_DIR/out_${MODEL}_${RUN}.txt"
-        
+    # BATCH_SIZE=$(get_batch_size "$MODEL")
+    for ((RUN=1;RUN<=NUM_RUNS; RUN++)); do    
+        echo "Model: $MODEL | Run $RUN/$NUM_RUNS"
+        for enc in "${encoder[@]}"; do
+        LOG_FILE="$LOG_DIR/out_${MODEL}_${enc}_${RUN}_audio_last.txt"
+
         if [ -f "$LOG_FILE" ]; then
             if grep -q "torch.cuda.OutOfMemoryError\|CUDA out of memory" "$LOG_FILE"; then
-                echo "[OOM] Re-running $MODEL run $RUN"
+                echo "[OOM] Re-running $MODEL run $RUN (out of memory)"
                 rm "$LOG_FILE"
             elif grep -q "Traceback\|Error" "$LOG_FILE"; then
                 echo "[ERROR] Re-running $MODEL run $RUN (non-OOM error)"
@@ -104,27 +144,28 @@ for MODEL in "${LLM_MODELS[@]}"; do
                 continue
             fi
         fi
-        echo "  Model: $MODEL | Run: $RUN / $NUM_RUNS | llm_dim: $LLM_DIM"
-
-        python src/benchmark/RespLLM/RespLLM.py \
-            --llm_model "$MODEL" \
-            --train_tasks "$TRAIN_TASKS" \
-            --test_tasks "$TEST_TASKS" \
-            --train_epochs 60 \
-            --meta_val_interval 3 \
-            --train_pct 1 \
-            --batch_size "$BATCH_SIZE" \
-            --llm_dim "$LLM_DIM" \
-            --d_ff "$LLM_DIM" \
-            --wandb_name "$run_name" \
-            ${HF_TOKEN:+--hf_token "$HF_TOKEN"} \
-            ${WANDB_KEY:+--wandb_key "$WANDB_KEY"} \
-            2>&1 | tee -a $LOG_FILE
-
-        echo "  Done: $MODEL run $RUN"
+            echo "Running RAW CONCAT mode with encoder: $enc"
+            run_name="${MODEL}_${enc}_${RUN}_audiolast_${MODE}"
+            python src/benchmark/RespLLM/RespLLM.py \
+                --llm_model $MODEL \
+                --train_tasks "$TRAIN_TASKS" \
+                --test_tasks "$TEST_TASKS" \
+                --train_epochs 60 \
+                --meta_val_interval 3 \
+                --meta_val_shot 20 \
+                --train_pct 1 \
+                --batch_size $BATCH_SIZE \
+                --llm_dim ${LLM_DIM} \
+                --d_ff ${LLM_DIM} \
+                --modality_encoder_type "$enc" \
+                --modal_embs audio_last \
+                --wandb_name "$run_name" \
+                ${HF_TOKEN:+--hf_token "$HF_TOKEN"} \
+                ${WANDB_KEY:+--wandb_key "$WANDB_KEY"} \
+                2>&1 | tee -a "$LOG_FILE"
+        done
     done
 done
-
 for MODEL in "${LLM_MODELS[@]}"; do
     LLM_DIM=$(get_llm_dim "$MODEL")
     # BATCH_SIZE=$(get_batch_size "$MODEL")
@@ -167,48 +208,7 @@ for MODEL in "${LLM_MODELS[@]}"; do
         done
     done
 done
-for MODEL in "${LLM_MODELS[@]}"; do
-    LLM_DIM=$(get_llm_dim "$MODEL")
-    # BATCH_SIZE=$(get_batch_size "$MODEL")
-    for ((RUN=1;RUN<=NUM_RUNS; RUN++)); do    
-        echo "Model: $MODEL | Run $RUN/$NUM_RUNS"
-        for enc in "${encoder[@]}"; do
-        LOG_FILE="$LOG_DIR/out_${MODEL}_${enc}_${RUN}_audiolast.txt"
 
-        if [ -f "$LOG_FILE" ]; then
-            if grep -q "torch.cuda.OutOfMemoryError\|CUDA out of memory" "$LOG_FILE"; then
-                echo "[OOM] Re-running $MODEL run $RUN (out of memory)"
-                rm "$LOG_FILE"
-            elif grep -q "Traceback\|Error" "$LOG_FILE"; then
-                echo "[ERROR] Re-running $MODEL run $RUN (non-OOM error)"
-                rm "$LOG_FILE"
-            else
-                echo "[SKIP] $MODEL run $RUN (assumed success)"
-                continue
-            fi
-        fi
-            echo "Running RAW CONCAT mode with encoder: $enc"
-            run_name="${MODEL}_${enc}_${RUN}_audiolast_${MODE}"
-            python src/benchmark/RespLLM/RespLLM.py \
-                --llm_model $MODEL \
-                --train_tasks "$TRAIN_TASKS" \
-                --test_tasks "$TEST_TASKS" \
-                --train_epochs 60 \
-                --meta_val_interval 3 \
-                --meta_val_shot 20 \
-                --train_pct 1 \
-                --batch_size $BATCH_SIZE \
-                --llm_dim ${LLM_DIM} \
-                --d_ff ${LLM_DIM} \
-                --modality_encoder_type "$enc" \
-                --modal_embs audio_last \
-                --wandb_name "$run_name" \
-                ${HF_TOKEN:+--hf_token "$HF_TOKEN"} \
-                ${WANDB_KEY:+--wandb_key "$WANDB_KEY"} \
-                2>&1 | tee -a "$LOG_FILE"
-        done
-    done
-done
 # echo "Running DEFAULT mode"
 # for MODEL in "${LLM_MODELS[@]}"; do
 #     LLM_DIM=$(get_llm_dim "$MODEL")
