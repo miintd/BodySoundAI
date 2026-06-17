@@ -29,8 +29,8 @@ echo "  Log directory: $LOG_DIR"
 
 encoder=("llm_embeddings")
 
-LLM_MODELS=("GPT2")
-NUM_RUNS=3
+LLM_MODELS=("GPT2Medium" "GPT2Large" "gemma2B")
+NUM_RUNS=1
 
 get_llm_dim() {
     case "$1" in
