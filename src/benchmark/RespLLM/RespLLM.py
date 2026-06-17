@@ -400,9 +400,7 @@ if __name__ == "__main__":
     parser.add_argument("--wandb_name", type=str, default="test")
 
     parser.add_argument("--use_audiolabel", action=argparse.BooleanOptionalAction, default=False)
-    parser.add_argument("--modal_embs", type=str, default=None)
-    parser.add_argument("--out_modal_projector", type=int, default=1) 
-    parser.add_argument("--out_feature_projector", type=int, default=10) 
+    parser.add_argument("--modal_embs", type=str, default=None) 
     parser.add_argument("--modality_encoder_type", type=str, default="onehot") # cnn, transformer
     parser.add_argument("--modality_embed_dim", type=int, default=10) # chỉ dùng khi modality_encoder_type=learnable
 

@@ -460,16 +460,14 @@ class RespLLM(nn.Module):
             return NotImplementedError("aligner module undefined")
         
         self.head_dropout = configs.head_dropout
+        self.output_projection = FlattenHead(self.head_nf, self.n_cls, head_dropout=self.head_dropout)
+        
         self.modal_embs = configs.modal_embs 
         # modality_classes = ["exhalation", "cough", "breath", "lung", "cough-shallow", "cough-heavy", "breathing-shallow", "breathing-deep"]
         modality_classes = ["breath", "cough", "lung"] 
         # modality_classes = ["school", "home", "dog", "outdoor", "transportation", "office", "gym", "cat"]
         self.modality_encoder_type = configs.modality_encoder_type 
         self.modality2idx = {m: i for i, m in enumerate(modality_classes)}
-        self.out_modal_projector = configs.out_modal_projector
-        self.out_feature_projector = configs.out_feature_projector
-        self.feature_head = FlattenHead(self.head_nf, self.out_feature_projector, head_dropout=self.head_dropout)
-        self.classifier = nn.Linear(self.out_feature_projector+self.out_modal_projector, self.n_cls)
         if self.modality_encoder_type == "onehot":
             self.num_modalities = len(modality_classes)         # 8
             modality_dim = self.num_modalities          
@@ -490,8 +488,6 @@ class RespLLM(nn.Module):
             modality_dim = embed_dim
         self.modality_projector = nn.Linear(modality_dim, self.d_llm)
         self.classifier_raw = nn.Linear(modality_dim + self.llm_model.config.hidden_size, self.n_cls)
-
-        self.output_projection = FlattenHead(self.head_nf, self.n_cls, head_dropout=self.head_dropout)
 
         self.print_trainable()
 
@@ -586,8 +582,10 @@ class RespLLM(nn.Module):
             if self.modal_embs == "modal_last":
             # print("Using modality embeddings!")
                 modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
+                # print("modality_vec shape before projector:", modality_vec.shape)
                 modality_vec = modality_vec.to(self.modality_projector.weight.dtype)
                 modality_vec = self.modality_projector(modality_vec).unsqueeze(1)
+                # print("modality_vec shape after projector:", modality_vec.shape)
                 llama_enc_out = torch.cat([prompt_embeddings, context_embeddings, enc_out, modality_vec], dim=1)
             elif self.modal_embs == "audio_last":
                 modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
@@ -614,24 +612,13 @@ class RespLLM(nn.Module):
         # if self.modal_embs is not None:
         #     # print("Using modality embeddings!")
         #     modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
-
-        #     if self.modal_embs == "projected_concat":
-        #         dec_out = self.feature_head(dec_out[:, :, -self.patch_nums:])
-        #         # print("dec_out shape after flatten head:", dec_out.shape)
-        #         modality_vec = self.modality_projector(modality_vec)      # (batch, 10)
-        #         # print("modality_vec shape:", modality_vec.shape)
-        #         fused = torch.cat([dec_out, modality_vec], dim=1)      
-        #         # print("dec_out shape after adding modality vector:", dec_out.shape)
-        #         dec_out = self.classifier(fused)                          # (batch, 2)
-        #         # print("dec_out shape after final fc:", dec_out.shape)
-        #     elif self.modal_embs == "raw_concat":
-        #         dec_flat = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=True)
-        #         # print("dec_out shape after flatten head:", dec_flat.shape)
-        #         # print("modality_vec shape:", modality_vec.shape)
-        #         fused = torch.cat([dec_flat, modality_vec], dim=1)
-        #         # print("dec_out shape after adding modality vector:", fused.shape)
-        #         dec_out = self.classifier_raw(fused)
-        #         # print("dec_out shape after final fc:", dec_out.shape)
+        #     dec_flat = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=True)
+        #     # print("dec_out shape after flatten head:", dec_flat.shape)
+        #     # print("modality_vec shape:", modality_vec.shape)
+        #     fused = torch.cat([dec_flat, modality_vec], dim=1)
+        #     # print("dec_out shape after adding modality vector:", fused.shape)
+        #     dec_out = self.classifier_raw(fused)
+        #     # print("dec_out shape after final fc:", dec_out.shape)
         # else:
         #     # print("Not using modality embeddings!")
         #     dec_out = self.output_projection(dec_out[:, :, -self.patch_nums:], no_fc=no_fc)
