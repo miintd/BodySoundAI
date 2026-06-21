@@ -112,6 +112,52 @@ def worker_init_fn(worker_id, seed=42):
     random.seed(seed + worker_id)
     torch.manual_seed(seed + worker_id)
 
+def apply_group_split_to_test(x_data, x_metadata, y_label, test_mode):
+    """
+    Chia dữ liệu thành 4 nhóm dựa trên label × symptom, sau đó lọc theo test_mode.
+    Group 1: label=0 + có symptom
+    Group 2: label=0 + không symptom  
+    Group 3: label=1 + có symptom
+    Group 4: label=1 + không symptom
+    """
+    symptoms = np.array([1 if 'following respiratory symptoms' in m else 0 for m in x_metadata])
+    
+    group1_indices = np.where((y_label == 0) & (symptoms == 1))[0]
+    group2_indices = np.where((y_label == 0) & (symptoms == 0))[0]
+    group3_indices = np.where((y_label == 1) & (symptoms == 1))[0]
+    group4_indices = np.where((y_label == 1) & (symptoms == 0))[0]
+    
+    test_size = np.min([len(group) for group in [group1_indices, group2_indices, group3_indices, group4_indices]]) 
+    
+    print(f"Group split - G1(label=0,sym): {len(group1_indices)}, G2(label=0,no_sym): {len(group2_indices)}, "
+          f"G3(label=1,sym): {len(group3_indices)}, G4(label=1,no_sym): {len(group4_indices)}")
+    
+    def sample_indices(group_indices, test_size):
+        print(f"sampling {test_size} from", len(group_indices))
+        test_sample_indices = np.random.choice(group_indices, size=test_size, replace=False)
+        remaining_indices = np.setdiff1d(group_indices, test_sample_indices)
+        return test_sample_indices, remaining_indices
+    
+    group1_indices_test, group1_indices_train = sample_indices(group1_indices, test_size)
+    group2_indices_test, group2_indices_train = sample_indices(group2_indices, test_size)
+    group3_indices_test, group3_indices_train = sample_indices(group3_indices, test_size)
+    group4_indices_test, group4_indices_train = sample_indices(group4_indices, test_size)
+
+    if test_mode == "balanced":
+        indices = np.concatenate([group1_indices_test, group2_indices_test, group3_indices_test, group4_indices_test])
+    elif test_mode == "gr1v3":
+        indices = np.concatenate([group1_indices, group3_indices])
+    elif test_mode == "gr2v4":
+        indices = np.concatenate([group2_indices, group4_indices])
+    elif test_mode == "gr1v4":
+        indices = np.concatenate([group1_indices, group4_indices])
+    elif test_mode == "gr2v3":
+        indices = np.concatenate([group2_indices, group3_indices])
+    else:
+        raise ValueError(f"Unknown test_mode: {test_mode}")
+    
+    return x_data[indices], x_metadata[indices], y_label[indices]
+
 def get_dataloader(configs, task, sample=False, deft_seed=None):
     tasks_config = {
         "S1": ("coviduk", "covid", "exhalation"),
@@ -434,40 +480,39 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
         y_set = np.load(feature_dir + "data_split.npy")
         
         if task in ["S3", "S4"]:
-            if configs.val_S3_S4:
-                print("Using original S3/S4 validation set")
-                x_data_train = x_data[y_set == "train"]
-                x_metadata_train = x_metadata[y_set == "train"]
-                y_label_train = y_label[y_set == "train"]
+            # print("Using original S3/S4 validation set")
+            x_data_train = x_data[y_set == "train"]
+            x_metadata_train = x_metadata[y_set == "train"]
+            y_label_train = y_label[y_set == "train"]
+            
+            x_data_vad = x_data[y_set == "validation"]
+            x_metadata_vad = x_metadata[y_set == "validation"]
+            y_label_vad = y_label[y_set == "validation"]
+
+            x_data_test = x_data[y_set == "test"]
+            x_metadata_test = x_metadata[y_set == "test"]
+            y_label_test = y_label[y_set == "test"]
+
+            # else:
+            #     print("Using S3/S4 validation set as extra training data")
+            #     x_data_train_raw = x_data[y_set == "train"]
+            #     x_metadata_train_raw = x_metadata[y_set == "train"]
+            #     y_label_train_raw = y_label[y_set == "train"]
+
+            #     (x_data_train, x_data_val_extra, x_metadata_train, x_metadata_val_extra, y_label_train, y_label_val_extra) = train_test_split(
+            #     x_data_train_raw, x_metadata_train_raw, y_label_train_raw, test_size=0.2, random_state=42, stratify=y_label_train_raw)
                 
-                x_data_vad = x_data[y_set == "validation"]
-                x_metadata_vad = x_metadata[y_set == "validation"]
-                y_label_vad = y_label[y_set == "validation"]
+            #     x_data_vad_orig = x_data[y_set == "validation"]
+            #     x_metadata_vad_orig = x_metadata[y_set == "validation"]
+            #     y_label_vad_orig = y_label[y_set == "validation"]
 
-                x_data_test = x_data[y_set == "test"]
-                x_metadata_test = x_metadata[y_set == "test"]
-                y_label_test = y_label[y_set == "test"]
+            #     x_data_test = x_data[y_set == "test"]
+            #     x_metadata_test = x_metadata[y_set == "test"]
+            #     y_label_test = y_label[y_set == "test"]
 
-            else:
-                print("Using S3/S4 validation set as extra training data")
-                x_data_train_raw = x_data[y_set == "train"]
-                x_metadata_train_raw = x_metadata[y_set == "train"]
-                y_label_train_raw = y_label[y_set == "train"]
-
-                (x_data_train, x_data_val_extra, x_metadata_train, x_metadata_val_extra, y_label_train, y_label_val_extra) = train_test_split(
-                x_data_train_raw, x_metadata_train_raw, y_label_train_raw, test_size=0.2, random_state=42, stratify=y_label_train_raw)
-                
-                x_data_vad_orig = x_data[y_set == "validation"]
-                x_metadata_vad_orig = x_metadata[y_set == "validation"]
-                y_label_vad_orig = y_label[y_set == "validation"]
-
-                x_data_test = x_data[y_set == "test"]
-                x_metadata_test = x_metadata[y_set == "test"]
-                y_label_test = y_label[y_set == "test"]
-
-                x_data_vad = np.concatenate([x_data_vad_orig, x_data_val_extra], axis=0)
-                x_metadata_vad = np.concatenate([x_metadata_vad_orig, x_metadata_val_extra], axis=0)
-                y_label_vad = np.concatenate([y_label_vad_orig, y_label_val_extra], axis=0)
+            #     x_data_vad = np.concatenate([x_data_vad_orig, x_data_val_extra], axis=0)
+            #     x_metadata_vad = np.concatenate([x_metadata_vad_orig, x_metadata_val_extra], axis=0)
+            #     y_label_vad = np.concatenate([y_label_vad_orig, y_label_val_extra], axis=0)
         else:
             x_data_train = x_data[y_set == 0]
             x_metadata_train = x_metadata[y_set == 0]
@@ -480,6 +525,11 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
             x_data_test = x_data[y_set == 2]
             x_metadata_test = x_metadata[y_set == 2]
             y_label_test = y_label[y_set == 2]
+            
+        # Apply group split to test set when full_dataset is False
+        if not configs.full_dataset:
+            x_data_test, x_metadata_test, y_label_test = apply_group_split_to_test(
+                x_data_test, x_metadata_test, y_label_test, configs.test_mode)
         
     elif dataset == "coswara":
         if configs.full_dataset == False: #label == "covid":
@@ -620,6 +670,10 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
         x_metadata_test = x_metadata[y_set == "test"]
         # split = np.load(feature_dir + "split.npy")
 
+        # Apply group split to test set when full_dataset is False (for coviduk)
+        if not configs.full_dataset:
+            x_data_test, x_metadata_test, y_label_test = apply_group_split_to_test(
+                x_data_test, x_metadata_test, y_label_test, configs.test_mode)
 
     if task in ["S5", "S6", "T6"]:
         x_data_train, x_metadata_train, y_label_train = downsample_balanced_dataset(x_data_train, x_metadata_train, y_label_train)
@@ -646,7 +700,10 @@ def get_dataloader(configs, task, sample=False, deft_seed=None):
         min_train_cls = 0
     print(collections.Counter(y_label_vad))
     print(collections.Counter(y_label_test))
-    min_test_cls = min(collections.Counter(y_label_test).values())
+    if len(y_label_test) > 0:
+        min_test_cls = min(collections.Counter(y_label_test).values())
+    else:
+        min_test_cls = 0
 
     # print(x_metadata_test)
 
@@ -982,6 +1039,15 @@ def upsample_balanced_dataset(x_train, metadata_train, y_train):
     return x_train_upsampled, metadata_upsampled, y_train_upsampled
 
 
+def _rule_based_binary_logits_from_context(context, device):
+    context_text = str(context).lower()
+    has_symptoms = (
+        "following respiratory symptoms" in context_text
+        or ("symptoms:" in context_text and "no obvious respiratory symptoms" not in context_text)
+    )
+    return torch.tensor([0.0, 1.0] if has_symptoms else [1.0, 0.0], device=device)
+
+
 def test(model, test_loader, loss_func, n_cls, plot_feature="", plot_only=False, return_auc=False, verbose=True, print_cm=True, 
          use_rule_base=False, dataset_name=None):
     total_loss = []
@@ -989,9 +1055,6 @@ def test(model, test_loader, loss_func, n_cls, plot_feature="", plot_only=False,
     features = []
     model.eval()
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    
-    # Flag to enable rule-based prediction for Coswara dataset
-    enable_rule_base = use_rule_base and dataset_name == "coswara"
     
     with torch.no_grad():
         for i,  (x1, x2, x3, y) in enumerate(test_loader):
@@ -1001,17 +1064,15 @@ def test(model, test_loader, loss_func, n_cls, plot_feature="", plot_only=False,
             # print(n_cls, y)
             y_hat = model(x1, x2, x3)
             
-            # Apply rule-based prediction fallback if enabled
-            if enable_rule_base:
+            # Apply rule-based prediction fallback for any binary task when requested.
+            if use_rule_base and y_hat.dim() == 2 and y_hat.size(1) == 2:
                 batch_size = x1.shape[0]
                 rule_based_logits = torch.zeros_like(y_hat)
-                
+
                 # Process each sample in the batch
                 for batch_idx in range(batch_size):
-                    context = x3[batch_idx] if isinstance(x3, list) else x3[batch_idx] if isinstance(x3, (tuple, np.ndarray)) else str(x3)
-                    has_symptoms = "following respiratory symptoms" in context.lower()
-        
-                    rule_based_logits[batch_idx] = torch.tensor([0.0, 1.0] if has_symptoms else [1.0, 0.0], device=device)
+                    context = x3[batch_idx] if isinstance(x3, (list, tuple, np.ndarray)) else x3
+                    rule_based_logits[batch_idx] = _rule_based_binary_logits_from_context(context, device)
                 #     if i == 0:
                 #         pred_class = 1 if has_symptoms else 0
                 #         print(f"  Sample {batch_idx}: has_symptoms={has_symptoms} | pred={pred_class} | context='{context[:80]}...'")
