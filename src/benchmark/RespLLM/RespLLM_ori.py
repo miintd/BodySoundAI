@@ -162,8 +162,9 @@ def train_RespLLM(configs):
         validation_loss = 0
         validation_aucs = []
         for j, val_loader in enumerate(val_loaders):
-            print("Task", configs.train_tasks[j])
-            val_acc, val_auc, val_loss = test(model, val_loader, loss_func, configs.n_cls, return_auc=True, print_cm=False) #, plot_feature="llm/task" + configs.train_tasks[j] + "val")
+            task_name = configs.train_tasks[j]
+            print("Task", task_name)
+            val_acc, val_auc, val_loss = test(model, val_loader, loss_func, configs.n_cls, return_auc=True, print_cm=False, use_rule_base=configs.use_rule_base) #, plot_feature="llm/task" + configs.train_tasks[j] + "val")
             validation_loss += val_loss
             validation_aucs.append(val_auc.item() if hasattr(val_auc, 'item') else val_auc)
         avg_val_loss = validation_loss / len(val_loaders)
@@ -213,23 +214,25 @@ def train_RespLLM(configs):
 
             print("="*10 + "test on seen tasks")
             for j, test_loader in enumerate(train_loaders_):
+                task_name = configs.train_tasks[j]
                 print("Task", configs.train_tasks[j])
                 
                 print(f"Test loader {j} has {len(test_loader)} batches")
                 if n_cls[configs.train_tasks[j]] != configs.n_cls:
                     pass
                 else:
-                    test(model, test_loader, loss_func, configs.n_cls)
+                    test(model, test_loader, loss_func, configs.n_cls, use_rule_base=configs.use_rule_base)
 
             print("="*10 + "test on unseen tasks")
             for j, test_loader in enumerate(test_loaders):
                 # test
-                print("Task", configs.test_tasks[j])
-                if  n_cls[configs.test_tasks[j]] != configs.n_cls:
-                    # test(model, test_loader, loss_func, configs.n_cls, plot_feature="llm/task" + configs.test_tasks[j] + "test", plot_only=True)
+                task_name = configs.test_tasks[j]
+                print("Task", task_name)
+                if  n_cls[task_name] != configs.n_cls:
+                    # test(model, test_loader, loss_func, configs.n_cls, plot_feature="llm/task" + task_name + "test", plot_only=True)
                     pass
                 else:
-                    test(model, test_loader, loss_func, configs.n_cls) #, plot_feature="llm/task" + configs.test_tasks[j] + "test")
+                    test(model, test_loader, loss_func, configs.n_cls, use_rule_base=configs.use_rule_base) #, plot_feature="llm/task" + configs.test_tasks[j] + "test")
 
         # if (epoch + 1) % configs.meta_val_interval == 0:
         #     configs.save_pth = f"cks/llm/model_{configs.llm_model}_{epoch+1}epoch.pt"
@@ -297,7 +300,7 @@ def evaluate_RespLLM(configs):
         if n_cls[task_name] != configs.n_cls:
             pass
         else:
-            test(model, test_loader_S, loss_func, configs.n_cls)
+            test(model, test_loader_S, loss_func, configs.n_cls, use_rule_base=configs.use_rule_base)
 
     # # train
     # print("="*10 + "train set eval")
@@ -314,11 +317,12 @@ def evaluate_RespLLM(configs):
     print("="*10 + "test on unseen tasks")
     for j, test_loader in enumerate(test_loaders):
         # test
-        print("Task", configs.test_tasks[j])
-        if n_cls[configs.test_tasks[j]] != configs.n_cls:
+        task_name = configs.test_tasks[j]
+        print("Task", task_name)
+        if n_cls[task_name] != configs.n_cls:
             pass
         else:
-            test(model, test_loader, loss_func, configs.n_cls)
+            test(model, test_loader, loss_func, configs.n_cls, use_rule_base=configs.use_rule_base)
 
 
 
@@ -395,6 +399,13 @@ if __name__ == "__main__":
     parser.add_argument("--wandb_name", type=str, default="test")
     parser.add_argument("--val_S3_S4", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--full_dataset", type=bool, default=False)
+    parser.add_argument("--test_mode", type=str, default="balanced")
+    parser.add_argument("--audio_linear", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--context_dropout", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--ablate_medhistory", type=bool, default=False)
+    
+    # Rule-based prediction fallback
+    parser.add_argument("--use_rule_base", type=bool, default=False)
     
     # Credentials from arguments
     parser.add_argument("--hf_token", type=str, default=None, help="HuggingFace API token")
