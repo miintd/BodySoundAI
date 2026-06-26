@@ -26,7 +26,7 @@ echo "  Train tasks: $TRAIN_TASKS"
 echo "  Test tasks: $TEST_TASKS"
 echo "  Log directory: $LOG_DIR"
 
-LLM_MODELS=("gemma2B" "phi" "mistral" "llama" "llama3" "OpenBioLLM")
+LLM_MODELS=("phi" "mistral" "llama3")
 # LLM_MODELS=("GPT2Medium" "GPT2Large" "GPT2XL" "gemma2B")
 # LLM_MODELS=("DistilGPT2" "GPT2" "GPTNeo125M" "GPTNeo1.3B" "GPT2Medium")
 NUM_RUNS=3
