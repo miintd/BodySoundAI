@@ -282,7 +282,15 @@ def evaluate_RespLLM(configs):
 
     model = RespLLM(configs)                              # khởi tạo trên CPU
     model.load_state_dict(checkpoint['model_state_dict']) # load weights ngay trên CPU
-    model = model.half()                                  # fp32 → fp16, giảm một nửa VRAM
+    model.half()
+    _SAFE_FP32 = (
+        nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d,
+        nn.LayerNorm,   # LLM dùng LayerNorm nhiều
+        nn.GroupNorm,
+    )
+    for m in model.modules():
+        if isinstance(m, _SAFE_FP32):
+            m.float()
     model = model.to(DEVICE)                              # move lên GPU sau cùng
     model.eval()
 
