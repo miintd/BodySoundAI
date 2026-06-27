@@ -3,32 +3,6 @@
 # MODE: "full" (default) or "covid"
 # Example: bash scripts/run_llm_baseline.sh full 2 "hf_xxxxx" "wandb_xxxxx"
 # Example: bash scripts/run_llm_baseline.sh covid 2 "hf_xxxxx" "wandb_xxxxx" GPT2Medium
-#
-# Pipeline (per model):
-#
-#   Train Multimodal
-#       v
-#   checkpoint (auto-discovered, no hardcoded timestamp)
-#       v
-#   Test: balanced, full, gr1v3, gr2v3, gr1v4, gr2v4
-#       v
-#   Rule-based (same checkpoint, --use_rule_base True, all test modes)
-#
-#   Train Audio-only (--no-use_context_)
-#       v
-#   checkpoint
-#       v
-#   Test: balanced, full, gr1v3, gr2v3, gr1v4, gr2v4
-#
-#   Train Context-only (--no-use_audio)
-#       v
-#   checkpoint
-#       v
-#   Test: balanced, full, gr1v3, gr2v3, gr1v4, gr2v4
-#
-# RespLLM_ori.py is never modified and its train/evaluate logic is untouched:
-# omitting --from_pretrain triggers train_RespLLM(); passing
-# --from_pretrain True (with --save_pth) triggers evaluate_RespLLM().
 
 set -uo pipefail
 
@@ -77,15 +51,13 @@ get_llm_dim() {
         phi)     echo 3072 ;;
         mistral) echo 4096 ;;
         llama)   echo 4096 ;;
+        llama3) echo 4096 ;;
+        OpenBioLLM) echo 4096 ;;
         deepseek-moe) echo 2048 ;;
         qwen-moe) echo 2048 ;;
     esac
 }
 
-# ---------------------------------------------------------------------------
-# Run a command, writing stdout/stderr to a log file. If the log already
-# exists and looks like a previous OOM or generic error, it is removed and
-# the command is re-run; otherwise the run is assumed successful and skipped.
 # ---------------------------------------------------------------------------
 run_with_log() {
     local log_file="$1"; shift
@@ -107,11 +79,6 @@ run_with_log() {
 }
 
 # ---------------------------------------------------------------------------
-# Train one model under a given architecture configuration (multimodal /
-# audio-only / context-only). No --from_pretrain flag is passed, so
-# RespLLM_ori.py runs train_RespLLM() and creates a fresh checkpoint dir at
-# cks/llm_ori/<model>_<timestamp>/model_best.pt.
-# ---------------------------------------------------------------------------
 train_once() {
     local model="$1" llm_dim="$2" log_file="$3" wandb_name="$4"; shift 4
     local extra_flags=("$@")
@@ -132,10 +99,6 @@ train_once() {
 }
 
 # ---------------------------------------------------------------------------
-# Find the checkpoint produced by the most recent training run for a model:
-# the newest cks/llm_ori/<model>_* directory by modification time. No
-# timestamp is hardcoded and no checkpoint is taken from the CLI.
-# ---------------------------------------------------------------------------
 find_new_checkpoint() {
     local model="$1"
     local dir
@@ -155,11 +118,6 @@ find_new_checkpoint() {
     echo "$ckpt"
 }
 
-# ---------------------------------------------------------------------------
-# Evaluate an already-trained checkpoint on a single test mode. Passes
-# --from_pretrain True (+ --save_pth) so RespLLM_ori.py runs
-# evaluate_RespLLM(). "full" maps to --full_dataset True instead of
-# --test_mode. use_rule_base="true" adds --use_rule_base True.
 # ---------------------------------------------------------------------------
 evaluate_checkpoint() {
     local model="$1" llm_dim="$2" ckpt="$3" test_mode="$4" log_file="$5" wandb_name="$6" use_rule_base="$7"; shift 7
@@ -196,11 +154,6 @@ evaluate_checkpoint() {
         "${extra_flags[@]}"
 }
 
-# ---------------------------------------------------------------------------
-# Train one architecture configuration for every model, then evaluate the
-# resulting checkpoint on every test mode. If run_rule_base="true", the same
-# checkpoint is additionally re-evaluated on every test mode with
-# --use_rule_base True (no separate training).
 # ---------------------------------------------------------------------------
 run_configuration() {
     local config_name="$1" log_prefix="$2" run_rule_base="$3"; shift 3
@@ -244,13 +197,13 @@ run_configuration() {
 run_configuration "multimodal" "multimodal" "true"
 
 # ===========================================================
-# AUDIO-ONLY  (train -> test on all modes)
-# ===========================================================
-run_configuration "audio_only" "audio" "false" --no-use_context_
-
-# ===========================================================
 # CONTEXT-ONLY  (train -> test on all modes)
 # ===========================================================
 run_configuration "context_only" "context" "false" --no-use_audio
+
+# ===========================================================
+# AUDIO-ONLY  (train -> test on all modes)
+# ===========================================================
+run_configuration "audio_only" "audio" "false" --no-use_context_
 
 echo "All configurations finished."
