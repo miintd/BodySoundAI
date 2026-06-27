@@ -35,7 +35,7 @@ get_llm_dim() {
         GPT2XL)       echo 1600 ;;
         gemma2B)      echo 2304 ;;
         phi)          echo 3072 ;;
-        mistral|llama) echo 4096 ;;
+        mistral|llama|llama3|OpenBioLLM) echo 4096 ;;
         deepseek-moe|qwen-moe) echo 2048 ;;
     esac
 }
