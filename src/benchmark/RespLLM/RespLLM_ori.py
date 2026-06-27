@@ -285,10 +285,12 @@ def evaluate_RespLLM(configs):
         test_loaders.append(test_loader)
 
 
-    checkpoint = torch.load(configs.save_pth)
-    model = RespLLM(configs).to(DEVICE)
-    # print(model)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    checkpoint = torch.load(configs.save_pth, map_location='cpu')  # load checkpoint trên CPU
+
+    model = RespLLM(configs)                              # khởi tạo trên CPU
+    model.load_state_dict(checkpoint['model_state_dict']) # load weights ngay trên CPU
+    model = model.half()                                  # fp32 → fp16, giảm một nửa VRAM
+    model = model.to(DEVICE)                              # move lên GPU sau cùng
     model.eval()
 
     loss_func = nn.CrossEntropyLoss()

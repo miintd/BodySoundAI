@@ -170,7 +170,7 @@ def train_RespLLM(configs):
             val_acc, val_auc, val_loss = test(model, val_loader, loss_func, configs.n_cls, return_auc=True, print_cm=False) #, plot_feature="llm/task" + configs.train_tasks[j] + "val")
             validation_loss += val_loss
             validation_aucs.append(val_auc.item() if hasattr(val_auc, 'item') else val_auc)
-            avg_val_loss = validation_loss / len(val_loaders)
+        avg_val_loss = validation_loss / len(val_loaders)
         print("average validation loss", avg_val_loss)
         avg_val_auc = np.mean(validation_aucs) if validation_aucs else 0
         print("validation AUC", avg_val_auc)
@@ -278,10 +278,12 @@ def evaluate_RespLLM(configs):
         test_loaders.append(test_loader)
 
     # tải model đã lưu lên và sử dụng để đánh giá
-    checkpoint = torch.load(configs.save_pth)
-    model = RespLLM(configs).to(DEVICE)
-    # print(model)
-    model.load_state_dict(checkpoint['model_state_dict'])
+    checkpoint = torch.load(configs.save_pth, map_location='cpu')  # load checkpoint trên CPU
+
+    model = RespLLM(configs)                              # khởi tạo trên CPU
+    model.load_state_dict(checkpoint['model_state_dict']) # load weights ngay trên CPU
+    model = model.half()                                  # fp32 → fp16, giảm một nửa VRAM
+    model = model.to(DEVICE)                              # move lên GPU sau cùng
     model.eval()
 
     loss_func = nn.CrossEntropyLoss()
@@ -437,4 +439,4 @@ if __name__ == "__main__":
         )
         train_RespLLM(args)
 
-send_telegram_message("Mô hình RespLLM đã train xong.")
+send_telegram_message(f"Mô hình {args.llm_model} đã train xong.")
