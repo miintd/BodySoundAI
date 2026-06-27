@@ -10,7 +10,7 @@ SAVE_PTH_AUDIO=${8:-""}    # Audio-only
 if [ "$MODE" = "covid" ]; then
     TRAIN_TASKS="S1,S2,S3,S4"
     TEST_TASKS="T1,T2,T3,T4"
-    LOG_DIR="logs_rule_based_covid"
+    LOG_DIR="logs_rule_based_covid_1"
 else
     TRAIN_TASKS="S1,S2,S3,S4,S5,S6,S7"
     TEST_TASKS="T1,T2,T3,T4,T5,T6"
