@@ -184,8 +184,8 @@ class RespLLM(nn.Module):
             #     )
         elif configs.llm_model == "llama3":
             model_id = "meta-llama/Meta-Llama-3-8B"
-            self.tokenizer = AutoTokenizer.from_pretrained(model_id)
-            self.llm_model = AutoModel.from_pretrained(model_id)
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id, token = token)
+            self.llm_model = AutoModel.from_pretrained(model_id, token = token)
             # self.llama_config = LlamaConfig.from_pretrained(model_id) # 13.5G
             
             # try:
@@ -489,6 +489,17 @@ class RespLLM(nn.Module):
         self.modality_projector = nn.Linear(modality_dim, self.d_llm)
         self.classifier_raw = nn.Linear(modality_dim + self.llm_model.config.hidden_size, self.n_cls)
 
+        # Freeze các module modality mới khi không sử dụng (modal_embs == None)
+        if self.modal_embs is None:
+            for param in self.modality_projector.parameters():
+                param.requires_grad = False
+            for param in self.classifier_raw.parameters():
+                param.requires_grad = False
+            if hasattr(self, 'modality_embedding'):
+                for param in self.modality_embedding.parameters():
+                    param.requires_grad = False
+            print("modal_embs is None → froze modality_projector, classifier_raw, modality_embedding")
+
         self.print_trainable()
 
     def reinitialize_clf(self, n_cls): 
@@ -521,6 +532,27 @@ class RespLLM(nn.Module):
         
         for param in self.output_projection.parameters():
             param.requires_grad = True # train tham số của lớp Linear
+        
+        # Xử lý các module modality mới
+        if self.modal_embs is not None:
+            for param in self.modality_projector.parameters():
+                param.requires_grad = True
+            if hasattr(self, 'modality_embedding'):
+                for param in self.modality_embedding.parameters():
+                    param.requires_grad = True
+            # classifier_raw chỉ unfreeze nếu thực sự được dùng trong forward
+            # (hiện tại code dùng classifier_raw đang bị comment, nên giữ frozen)
+            for param in self.classifier_raw.parameters():
+                param.requires_grad = False
+        else:
+            for param in self.modality_projector.parameters():
+                param.requires_grad = False
+            for param in self.classifier_raw.parameters():
+                param.requires_grad = False
+            if hasattr(self, 'modality_embedding'):
+                for param in self.modality_embedding.parameters():
+                    param.requires_grad = False
+        
         self.print_trainable()
 
 
@@ -580,7 +612,6 @@ class RespLLM(nn.Module):
         if self.use_audio and self.use_context_:
             # print("Using audio embeddings!")
             if self.modal_embs == "modal_last":
-            # print("Using modality embeddings!")
                 modality_vec = self.encode_modality(x_modality, x_enc.device)   # (batch, hidden_size)
                 # print("modality_vec shape before projector:", modality_vec.shape)
                 modality_vec = modality_vec.to(self.modality_projector.weight.dtype)
@@ -602,7 +633,6 @@ class RespLLM(nn.Module):
 
         
         dec_out = self.llm_model(inputs_embeds=llama_enc_out).last_hidden_state
-        # print("dec_out shape:", dec_out.shape)
         dec_out = dec_out[:, :, :self.d_ff]
         # print("dec_out shape after slicing:", dec_out.shape)
         dec_out = dec_out.permute(0, 2, 1).contiguous()
