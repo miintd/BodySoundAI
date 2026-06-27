@@ -1058,7 +1058,8 @@ def test(model, test_loader, loss_func, n_cls, plot_feature="", plot_only=False,
             # print(x3)
             y = y.to(device)
             # print(n_cls, y)
-            y_hat = model(x1, x2, x3)
+            with torch.autocast(device_type='cuda', dtype=torch.float16): 
+                y_hat = model(x1, x2, x3)
             
             # Apply rule-based prediction fallback for any binary task when requested.
             if use_rule_base and y_hat.dim() == 2 and y_hat.size(1) == 2:
