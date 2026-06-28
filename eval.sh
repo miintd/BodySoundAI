@@ -15,7 +15,7 @@ LLM_MODEL=${5:-""}
 if [ "$MODE" = "covid" ]; then
     TRAIN_TASKS="S1,S2,S3,S4"
     TEST_TASKS="T1,T2,T3,T4"
-    LOG_DIR="logs_rule_based_covid_1"
+    LOG_DIR="logs_rule_based_covid_2"
 else
     TRAIN_TASKS="S1,S2,S3,S4,S5,S6,S7"
     TEST_TASKS="T1,T2,T3,T4,T5,T6"
@@ -28,7 +28,9 @@ echo "  Train tasks: $TRAIN_TASKS"
 echo "  Test tasks: $TEST_TASKS"
 echo "  Log directory: $LOG_DIR"
 
-DEFAULT_LLM_MODELS=("GPT2Medium" "GPT2Large" "GPT2XL" "gemma2B")
+NUM_RUNS=3
+
+DEFAULT_LLM_MODELS=("phi" "mistral" "llama3")
 if [ -n "$LLM_MODEL" ]; then
     LLM_MODELS=("$LLM_MODEL")
 else
@@ -163,31 +165,33 @@ run_configuration() {
         local llm_dim
         llm_dim=$(get_llm_dim "$MODEL")
 
-        echo "===== [$config_name] $MODEL ====="
+        for RUN in $(seq 1 "$NUM_RUNS"); do
+            echo "===== [$config_name] $MODEL | Run $RUN/$NUM_RUNS ====="
 
-        local train_log="$LOG_DIR/${log_prefix}_train_${MODEL}.txt"
-        train_once "$MODEL" "$llm_dim" "$train_log" "${MODEL}_${log_prefix}_train" "${extra_flags[@]}"
+            local train_log="$LOG_DIR/${log_prefix}_train_${MODEL}_run${RUN}.txt"
+            train_once "$MODEL" "$llm_dim" "$train_log" "${MODEL}_${log_prefix}_train_run${RUN}" "${extra_flags[@]}"
 
-        local ckpt
-        if ! ckpt=$(find_new_checkpoint "$MODEL"); then
-            echo "  Skipping eval for $MODEL ($config_name): no checkpoint found"
-            continue
-        fi
-        echo "  Found checkpoint: $ckpt"
+            local ckpt
+            if ! ckpt=$(find_new_checkpoint "$MODEL"); then
+                echo "  Skipping eval for $MODEL ($config_name) run $RUN: no checkpoint found"
+                continue
+            fi
+            echo "  Found checkpoint: $ckpt"
 
-        for TEST in "${TEST_MODES[@]}"; do
-            local eval_log="$LOG_DIR/${log_prefix}_${TEST}_${MODEL}.txt"
-            evaluate_checkpoint "$MODEL" "$llm_dim" "$ckpt" "$TEST" "$eval_log" \
-                "${MODEL}_${log_prefix}_${TEST}" "false" "${extra_flags[@]}"
-        done
-
-        if [ "$run_rule_base" = "true" ]; then
             for TEST in "${TEST_MODES[@]}"; do
-                local rb_log="$LOG_DIR/rulebase_${TEST}_${MODEL}.txt"
-                evaluate_checkpoint "$MODEL" "$llm_dim" "$ckpt" "$TEST" "$rb_log" \
-                    "${MODEL}_rulebase_${TEST}" "true" "${extra_flags[@]}"
+                local eval_log="$LOG_DIR/${log_prefix}_${TEST}_${MODEL}_run${RUN}.txt"
+                evaluate_checkpoint "$MODEL" "$llm_dim" "$ckpt" "$TEST" "$eval_log" \
+                    "${MODEL}_${log_prefix}_${TEST}_run${RUN}" "false" "${extra_flags[@]}"
             done
-        fi
+
+            if [ "$run_rule_base" = "true" ]; then
+                for TEST in "${TEST_MODES[@]}"; do
+                    local rb_log="$LOG_DIR/rulebase_${TEST}_${MODEL}_run${RUN}.txt"
+                    evaluate_checkpoint "$MODEL" "$llm_dim" "$ckpt" "$TEST" "$rb_log" \
+                        "${MODEL}_rulebase_${TEST}_run${RUN}" "true" "${extra_flags[@]}"
+                done
+            fi
+        done
     done
 }
 
@@ -199,11 +203,11 @@ run_configuration "multimodal" "multimodal" "true"
 # ===========================================================
 # CONTEXT-ONLY  (train -> test on all modes)
 # ===========================================================
-run_configuration "context_only" "context" "false" --no-use_audio
+# run_configuration "context_only" "context" "false" --no-use_audio
 
 # ===========================================================
 # AUDIO-ONLY  (train -> test on all modes)
 # ===========================================================
-run_configuration "audio_only" "audio" "false" --no-use_context_
+# run_configuration "audio_only" "audio" "false" --no-use_context_
 
 echo "All configurations finished."
