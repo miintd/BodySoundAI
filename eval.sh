@@ -28,9 +28,9 @@ echo "  Train tasks: $TRAIN_TASKS"
 echo "  Test tasks: $TEST_TASKS"
 echo "  Log directory: $LOG_DIR"
 
-NUM_RUNS=3
+NUM_RUNS=5
 
-DEFAULT_LLM_MODELS=("phi" "mistral" "llama3")
+DEFAULT_LLM_MODELS=("GPT2XL" "gemma2B" "phi" "mistral" "llama3")
 if [ -n "$LLM_MODEL" ]; then
     LLM_MODELS=("$LLM_MODEL")
 else
