@@ -198,7 +198,7 @@ run_configuration() {
 # ===========================================================
 # MULTIMODAL  (train -> test on all modes -> rule-based on same ckpt)
 # ===========================================================
-run_configuration "multimodal" "multimodal" "true"
+run_configuration "multimodal" "multimodal" "false"
 
 # ===========================================================
 # CONTEXT-ONLY  (train -> test on all modes)
